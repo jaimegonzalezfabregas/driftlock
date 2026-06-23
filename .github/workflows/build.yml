@@ -13,6 +13,7 @@ concurrency:
 
 env:
   GODOT_VERSION: 4.5.2
+  PROJECT_PATH: .
 
 permissions:
   contents: read
@@ -32,37 +33,28 @@ jobs:
 
       - name: Setup
         run: |
-          echo "HOME=$HOME"
-          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
-          ls -la /root/.local/share/godot/export_templates/ 2>/dev/null || echo "no root templates"
-          ls -la ~/.local/share/godot/export_templates/ 2>/dev/null || echo "no home templates"
-          godot --version
+          mkdir -v -p ~/.local/share/godot/export_templates/
+          mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
 
       - name: Web Build
-        env:
-          HOME: /root
         run: |
-          mkdir -p /tmp/export/web
-          godot --headless --verbose --path "$GITHUB_WORKSPACE" --export-release "Web" /tmp/export/web/index.html > /tmp/godot_output.txt 2>&1
-          EXIT_CODE=$?
-          echo "GODOT_EXIT_CODE=$EXIT_CODE"
-          if [ $EXIT_CODE -ne 0 ]; then
-            cat /tmp/godot_output.txt | tail -100
-          fi
-          exit $EXIT_CODE
+          mkdir -v -p build/web
+          EXPORT_DIR="$(readlink -f build)"
+          cd $PROJECT_PATH
+          godot --headless --verbose --export-release "Web" "$EXPORT_DIR/web/index.html"
 
       - name: Upload Godot Output
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: godot-output
-          path: /tmp/godot_output.txt
+        if: failure()
+        run: |
+          cat /root/.local/share/godot/export_templates/ 2>/dev/null
+          ls -la /root/.local/share/godot/export_templates/ 2>/dev/null
+          ls -la ~/.local/share/godot/export_templates/ 2>/dev/null
 
       - name: Upload Pages Artifact
         if: success()
         uses: actions/upload-pages-artifact@v3
         with:
-          path: /tmp/export/web/
+          path: build/web/
 
   deploy-pages:
     if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
