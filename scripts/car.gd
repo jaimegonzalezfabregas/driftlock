@@ -80,6 +80,15 @@ func _physics_process(delta: float) -> void:
 			_spin(delta, p)
 
 	move_and_slide()
+
+	# Air drag: F_drag = air_drag × v² opposes motion every frame.
+	# This gives a natural top speed without hard-clamping velocity.
+	var speed = velocity.length()
+	if speed > 0.0:
+		var drag_force: float = _g(p, "air_drag", 0.4) * speed * speed
+		var drag_accel: float = drag_force / _g(p, "car_mass", 1000.0)
+		velocity -= velocity.normalized() * drag_accel * delta
+
 	current_speed = velocity.length()
 
 	if get_last_slide_collision():

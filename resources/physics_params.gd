@@ -10,11 +10,17 @@ extends Resource
 ## Car mass (arbitrary units).  Higher mass = slower acceleration from same power.
 @export var car_mass: float = 1000.0
 
+## Air drag coefficient.  Drag force = air_drag × v² opposes motion every
+## frame, creating a natural top speed: v_top = (engine_power / air_drag)^⅓.
+## Higher values = lower top speed and more noticeable deceleration when
+## coasting.
+@export var air_drag: float = 0.4
+
 # ── Spin ──────────────────────────────────────────────────────────────────
 ## Angular mass (moment of inertia, arbitrary units).  Higher values make
 ## the car harder to spin (more rotational KE needed for the same angular
 ## velocity).  Roughly analogous to `car_mass` but for rotation.
-@export var angular_mass: float = 1500.0
+@export var angular_mass: float = 5000000.0
 
 ## Angular‑velocity multiplier per 60‑FPS physics tick while spinning
 ## (0.0 – 1.0).  The spin speed is set once on entry via kinetic‑energy
