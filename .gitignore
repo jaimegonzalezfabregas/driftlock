@@ -1,0 +1,10 @@
+# Godot editor and import cache
+.godot/
+*.import
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+bin/

@@ -1,0 +1,257 @@
+extends CharacterBody2D
+
+enum State { ACCELERATE, SPINNING }
+
+var car_state: State = State.ACCELERATE
+var spin_direction: int = 0
+var spin_angular_velocity: float = 0.0   # rad/s
+var current_speed: float = 0.0
+
+var _test_input_left: bool = false
+var _test_input_right: bool = false
+var _accept_keyboard_input: bool = true
+var _PP = preload("res://resources/physics_params.gd")
+var _local_params: Resource = null
+
+signal state_changed(new_state: State)
+signal wall_hit()
+
+
+func _g(p: Resource, key: String, default = null):
+	if p == null:
+		return default
+	var v = p.get(key)
+	return v if v != null else default
+
+
+func _ready() -> void:
+	_ensure_params()
+	_sync_keyboard_flag()
+
+
+func _ensure_params() -> void:
+	var gs = _singleton()
+	if gs != null:
+		if gs.get("physics_params") == null:
+			gs.set("physics_params", _PP.new())
+	else:
+		if _local_params == null:
+			_local_params = _PP.new()
+
+
+func _sync_keyboard_flag() -> void:
+	var gs = _singleton()
+	if gs != null:
+		_accept_keyboard_input = gs.get("accept_keyboard_input")
+
+
+## Safe GameState singleton accessor — returns null if not registered.
+## Not declared with a concrete type to avoid compile-time resolution
+## of the GameState autoload in test environments.
+static func _singleton():
+	if Engine.has_singleton("GameState"):
+		return Engine.get_singleton("GameState")
+	return null
+
+
+func P() -> Resource:
+	var gs = _singleton()
+	if gs != null:
+		if gs.get("physics_params") == null:
+			gs.set("physics_params", _PP.new())
+		return gs.get("physics_params")
+	if _local_params == null:
+		_local_params = _PP.new()
+	return _local_params
+
+
+func _physics_process(delta: float) -> void:
+	var p = P()
+	if p == null:
+		return
+
+	_handle_input()
+
+	match car_state:
+		State.ACCELERATE:
+			_accelerate(delta, p)
+		State.SPINNING:
+			_spin(delta, p)
+
+	move_and_slide()
+	current_speed = velocity.length()
+
+	if get_last_slide_collision():
+		var col := get_last_slide_collision()
+		if col.get_collider() is StaticBody2D:
+			if _g(p, "wall_bounce", false):
+				var rest = _g(p, "wall_bounce_restitution", 0.3)
+				velocity = velocity.bounce(col.get_normal()) * rest
+			else:
+				emit_signal("wall_hit")
+
+	queue_redraw()
+
+
+func _handle_input() -> void:
+	var j: bool
+	var l: bool
+
+	if _accept_keyboard_input:
+		j = Input.is_key_pressed(KEY_A)
+		l = Input.is_key_pressed(KEY_D)
+	else:
+		j = _test_input_left
+		l = _test_input_right
+
+	var wants_spin = (j or l) and not (j and l)
+
+	if car_state == State.ACCELERATE:
+		if wants_spin:
+			spin_direction = -1 if j else 1
+			_transfer_linear_to_rotational(P())
+			car_state = State.SPINNING
+			emit_signal("state_changed", State.SPINNING)
+	elif car_state == State.SPINNING:
+		if not wants_spin:
+			# No snap needed — spin drag already bled off sideways velocity.
+			car_state = State.ACCELERATE
+			spin_direction = 0
+			spin_angular_velocity = 0.0
+			emit_signal("state_changed", State.ACCELERATE)
+
+
+func _accelerate(delta: float, p: Resource) -> void:
+	var forward := Vector2.RIGHT.rotated(global_rotation)
+	var power = _g(p, "engine_power", 20_000_000.0)
+	var mass = _g(p, "car_mass", 1000.0)
+
+	# Power‑based acceleration: F = P / v,  a = F / m.
+	# At speed v the forward acceleration is a = P / (m · v).
+	# This naturally decreases as speed rises — doubling the speed halves
+	# the acceleration.  Capped at `_max_fwd_accel` near standstill to
+	# avoid P/0 and give a snappy launch.
+	var _max_fwd_accel := 600.0
+	var fwd_speed = forward.dot(velocity)
+	var speed = abs(fwd_speed)
+	var accel = power / (mass * maxf(speed, 1.0))
+	accel = minf(accel, _max_fwd_accel)
+
+	# Engine force always pushes forward — even if the car is rolling
+	# backward, the engine fights it.
+	var fwd_impulse = forward * accel * delta
+	velocity += fwd_impulse
+
+	# Floor: never drop below min forward speed.
+	# Recalculate forward speed after impulse.
+	fwd_speed = forward.dot(velocity)
+	var min_speed = _g(p, "min_accelerate_speed", 50.0)
+	if fwd_speed < min_speed:
+		velocity += forward * (min_speed - fwd_speed)
+
+
+func _spin(delta: float, p: Resource) -> void:
+	# Drag angular velocity (tire friction during spin).
+	var drag = _g(p, "spin_drag", 0.97)
+	spin_angular_velocity *= pow(drag, delta * 60.0)
+
+	# Clamp to minimum spin rate (car keeps rotating even when nearly stopped).
+	var min_rate = _g(p, "min_spin_rate", 1.5)
+	if abs(spin_angular_velocity) < min_rate:
+		spin_angular_velocity = sign(spin_angular_velocity) * min_rate
+
+	# Apply rotation.
+	global_rotation += spin_direction * spin_angular_velocity * delta
+
+	# Decompose linear velocity into forward (along heading) and sideways
+	# (perpendicular) components.  Apply asymmetric drag — heavy sideways
+	# bleed, lighter forward coast — so the car naturally aligns forward
+	# during the spin instead of snapping on exit.
+	var fwd := Vector2.RIGHT.rotated(global_rotation)
+	var side := fwd.rotated(PI * 0.5)
+
+	var fwd_speed = fwd.dot(velocity)
+	var side_speed = side.dot(velocity)
+
+	var fwd_drag = _g(p, "spin_forward_drag", 0.98)
+	var side_drag = _g(p, "spin_sideways_drag", 0.5)
+
+	fwd_speed *= pow(fwd_drag, delta * 60.0)
+	side_speed *= pow(side_drag, delta * 60.0)
+
+	velocity = fwd * fwd_speed + side * side_speed
+
+
+## Convert a fraction of linear kinetic energy to rotational kinetic
+## energy when the car starts a spin.  This naturally reduces forward
+## speed while generating a spin — the faster you're going, the harder
+## you whip around.
+func _transfer_linear_to_rotational(p: Resource) -> void:
+	var mass = _g(p, "car_mass", 1000.0)
+	var car_w = _g(p, "car_width", 36.0)
+	var car_h = _g(p, "car_height", 20.0)
+
+	# Moment of inertia for a rectangular body spinning about its centre.
+	var I = (1.0 / 12.0) * mass * (car_w * car_w + car_h * car_h)
+
+	var v = velocity.length()
+	if v < 1.0:
+		# Too slow for meaningful transfer — just set minimum spin rate.
+		spin_angular_velocity = 0.0
+		return
+
+	var E_lin = 0.5 * mass * v * v
+	const TRANSFER := 0.03   # 3 % of linear KE → rotational KE
+
+	var E_rot = E_lin * TRANSFER
+
+	# New linear speed after energy removed.
+	var E_lin_new = E_lin - E_rot
+	var v_new = sqrt(maxf(0.0, 2.0 * E_lin_new / mass))
+	velocity = velocity.normalized() * v_new
+
+	# Angular velocity from transferred rotational energy.
+	spin_angular_velocity = sqrt(2.0 * E_rot / I)
+
+
+func start_race() -> void:
+	car_state = State.ACCELERATE
+	var p = P()
+	var initial: float = _g(p, "initial_speed", 100.0)
+	velocity = Vector2.RIGHT.rotated(global_rotation) * initial
+	current_speed = initial
+	emit_signal("state_changed", State.ACCELERATE)
+
+
+func reset(pos: Vector2, rot: float) -> void:
+	car_state = State.ACCELERATE
+	spin_direction = 0
+	spin_angular_velocity = 0.0
+	velocity = Vector2.ZERO
+	_test_input_left = false
+	_test_input_right = false
+	global_position = pos
+	global_rotation = rot
+	emit_signal("state_changed", State.ACCELERATE)
+
+
+func set_test_input(left: bool, right: bool) -> void:
+	_test_input_left = left
+	_test_input_right = right
+
+
+func _draw() -> void:
+	var p = P()
+	var dw = _g(p, "car_draw_width", 40.0) if p else 40.0
+	var dh = _g(p, "car_draw_height", 24.0) if p else 24.0
+
+	var rect := Rect2(-dw/2, -dh/2, dw, dh)
+	draw_rect(rect, Color.WHITE)
+
+	var tip = Vector2(dw/2 + 2, 0)
+	var l = Vector2(dw/2 - 6, -dh/4)
+	var r = Vector2(dw/2 - 6, dh/4)
+	draw_colored_polygon(PackedVector2Array([tip, l, r]), Color(0.85, 0.85, 0.85))
+
+	if car_state == State.SPINNING:
+		draw_rect(rect, Color.RED, false, 2.0)

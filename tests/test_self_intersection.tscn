@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://c3u6dsrpj5vka"]
+
+[ext_resource type="Script" path="res://tests/test_self_intersection.gd" id="1"]
+
+[node name="TestSelfIntersection" type="Node2D"]
+script = ExtResource("1")
