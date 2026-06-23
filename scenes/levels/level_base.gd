@@ -30,11 +30,14 @@ func _ready() -> void:
 	var end_pos := path.end_pos
 	var end_dir := path.end_dir
 
-	_build_goal(end_pos, end_dir)
 	_level_specific_setup(path.curve)
 	_spawn_car(start_pos, start_dir.angle())
 	_setup_camera()
+	_build_goal(end_pos, end_dir)
 	_setup_hud()
+	# Defer goal activation so body_entered doesn't fire on car overlap
+	# when start and finish are on the same straight section.
+	call_deferred("_activate_goal")
 
 	if _car:
 		_car.start_race()
@@ -54,6 +57,9 @@ func _build_goal(pos: Vector2, dir: Vector2) -> void:
 	goal.name = "GoalArea"
 	goal.global_position = pos
 	goal.rotation = dir.angle()
+	# monitoring starts false — _activate_goal enables it one frame later
+	# to prevent false "YOU WIN" if the car spawns overlapping the goal area.
+	goal.monitoring = false
 
 	var shape := RectangleShape2D.new()
 	shape.size = Vector2(GOAL_THICKNESS, TRACK_WIDTH)
@@ -62,8 +68,15 @@ func _build_goal(pos: Vector2, dir: Vector2) -> void:
 	col.shape = shape
 	goal.add_child(col)
 
-	goal.body_entered.connect(_on_goal_entered)
 	add_child(goal)
+
+
+func _activate_goal() -> void:
+	var goal := $GoalArea as Area2D
+	if not goal:
+		return
+	goal.monitoring = true
+	goal.body_entered.connect(_on_goal_entered)
 
 
 func _spawn_car(pos: Vector2, rot: float) -> void:
