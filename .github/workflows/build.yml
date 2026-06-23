@@ -32,43 +32,35 @@ jobs:
 
       - name: Setup Export Templates
         run: |
-          mkdir -v -p $HOME/.local/share/godot/export_templates/
+          mkdir -p $HOME/.local/share/godot/export_templates/
           if [ -d "/root/.local/share/godot/export_templates/${GODOT_VERSION}.stable" ]; then
             mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable $HOME/.local/share/godot/export_templates/
           fi
-          echo "=== templates ==="
-          ls -R $HOME/.local/share/godot/export_templates/
 
       - name: Pre-heat Import Cache
         run: godot --headless --editor --quit || true
 
       - name: Web Build
-        id: build
         run: |
           mkdir -p build/web
           EXPORT_DIR="$(readlink -f build)"
-          godot --headless --verbose --export-release "Web" "$EXPORT_DIR/web/index.html" > godot_output.txt 2>&1 || echo "EXIT_CODE=$?" >> godot_output.txt
-          cat godot_output.txt
+          godot --headless --export-release "Web" "$EXPORT_DIR/web/index.html"
 
-      - name: Upload Godot Output (always)
-        if: always()
-        uses: actions/upload-artifact@v4
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: godot-output
-          path: godot_output.txt
-          retention-days: 1
-
-      - name: Upload Build Artifact
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-build
           path: build/web/
-          retention-days: 7
 
+  deploy-pages:
+    name: Deploy to GitHub Pages
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+    needs: export-web
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
       - name: Deploy to GitHub Pages
-        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
-        uses: JamesIves/github-pages-deploy-action@v4
-        with:
-          branch: gh-pages
-          folder: build/web
+        id: deployment
+        uses: actions/deploy-pages@v4
