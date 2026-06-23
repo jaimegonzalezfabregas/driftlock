@@ -13,6 +13,17 @@ var spin_energy: float = 0.0            # normalised 0–1 for UI
 var _last_boost: float = 0.0            # most recent boost amount (for FX)
 var _boost_flash_timer: float = 0.0     # seconds remaining of boost flash
 
+# ── Combo system ─────────────────────────────────────────────────────────
+## Consecutive spins within the grace window increase the combo counter,
+## which multiplies the exit boost.  Grace timer counts down during
+## ACCELERATE state; if it reaches 0 the combo resets.
+var _combo_count: int = 0
+var _combo_timer: float = 0.0
+
+const COMBO_GRACE_PERIOD: float = 2.0   # seconds
+const COMBO_BOOST_PER_STEP: float = 0.5 # boost × per extra combo level
+const COMBO_MAX: int = 5                # cap combo at 5 → 3.0× boost
+
 var _test_input_left: bool = false
 var _test_input_right: bool = false
 var _accept_keyboard_input: bool = true
@@ -23,6 +34,7 @@ var _track_builder: Node = null  # set by level_base after spawn
 signal state_changed(new_state: State)
 signal wall_hit()
 signal boost_applied(amount: float)
+signal combo_changed(count: int)
 
 
 func _g(p: Resource, key: String, default = null):
@@ -102,6 +114,14 @@ func _physics_process(delta: float) -> void:
 	# Normalised spin energy (0–1) for UI / visual feedback.
 	spin_energy = clampf(spin_angular_velocity / 80.0, 0.0, 1.0)
 
+	# Combo grace timer — ticks down during ACCELERATE, resets combo on expiry.
+	if car_state == State.ACCELERATE and _combo_count > 0:
+		_combo_timer -= delta
+		if _combo_timer <= 0.0:
+			_combo_timer = 0.0
+			_combo_count = 0
+			combo_changed.emit(0)
+
 	if _boost_flash_timer > 0.0:
 		_boost_flash_timer -= delta
 
@@ -133,6 +153,14 @@ func _handle_input() -> void:
 	if car_state == State.ACCELERATE:
 		var min_time = _g(P(), "min_accelerate_time", 0.0)
 		if wants_spin and accelerate_timer >= min_time:
+			# ── Combo: if grace timer still running, chain the spin ──
+			if _combo_timer > 0.0 and _combo_count > 0:
+				_combo_count = min(_combo_count + 1, COMBO_MAX)
+			else:
+				_combo_count = 1
+			_combo_timer = 0.0
+			combo_changed.emit(_combo_count)
+
 			spin_direction = -1 if j else 1
 			spin_timer = 0.0
 			spin_angular_velocity = _g(P(), "min_spin_rate", 0.5)
@@ -151,6 +179,14 @@ func _handle_input() -> void:
 			var boost_mult = _g(p_exit, "spin_boost_multiplier", 3.0)
 			var boost_cap = _g(p_exit, "spin_boost_cap", 600.0)
 			var boost = minf(spin_angular_velocity * boost_mult, boost_cap)
+
+			# Combo multiplier: each consecutive spin within the grace
+			# window adds +0.5× to the boost (capped at 3.0× total).
+			if boost > 0.0 and _combo_count > 1:
+				var combo_factor := 1.0 + (_combo_count - 1) * COMBO_BOOST_PER_STEP
+				combo_factor = minf(combo_factor, 3.0)
+				boost *= combo_factor
+
 			if boost > 0.0:
 				velocity += fwd * boost
 				_last_boost = boost
@@ -159,6 +195,8 @@ func _handle_input() -> void:
 
 			car_state = State.ACCELERATE
 			accelerate_timer = 0.0
+			# Start combo grace timer — spin again within this window to chain.
+			_combo_timer = COMBO_GRACE_PERIOD
 			spin_direction = 0
 			spin_angular_velocity = 0.0
 			spin_timer = 0.0

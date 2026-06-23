@@ -17,6 +17,7 @@ var _camera: Camera2D = null
 var _hud_layer: CanvasLayer = null
 var _boost_bar_bg: ColorRect = null
 var _boost_bar_fill: ColorRect = null
+var _combo_label: Label = null
 
 
 func _ready() -> void:
@@ -129,6 +130,23 @@ func _setup_hud() -> void:
 	_hud_layer.add_child(fill)
 	_boost_bar_fill = fill
 
+	# Combo label (top‑right).
+	var cl := Label.new()
+	cl.name = "ComboLabel"
+	cl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	cl.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	cl.add_theme_color_override("font_color", Color(1.0, 0.8, 0.0))
+	cl.add_theme_font_size_override("font_size", 36)
+	cl.position = Vector2(view.x - margin - 120, margin)
+	cl.size = Vector2(120, 50)
+	cl.text = ""
+	_hud_layer.add_child(cl)
+	_combo_label = cl
+
+	# Connect combo signal when car is ready.
+	if _car and _car.has_signal("combo_changed"):
+		_car.combo_changed.connect(_on_combo_changed)
+
 
 # ---------------------------------------------------------------------------
 # Per-frame
@@ -171,6 +189,20 @@ func _on_goal_entered(body: Node) -> void:
 		_game_over = true
 		print("YOU WIN!")
 		_end_game()
+
+
+func _on_combo_changed(count: int) -> void:
+	if not _combo_label:
+		return
+	if count > 1:
+		_combo_label.text = "COMBO x%d" % count
+		# Pulse effect: scale bounce on each increment.
+		var tween := create_tween()
+		tween.set_trans(Tween.TRANS_BOUNCE)
+		tween.tween_property(_combo_label, "scale", Vector2(1.3, 1.3), 0.1)
+		tween.tween_property(_combo_label, "scale", Vector2(1.0, 1.0), 0.2)
+	else:
+		_combo_label.text = ""
 
 
 func _end_game() -> void:
