@@ -185,12 +185,10 @@ func _spin(delta: float, p: Resource) -> void:
 
 ## Each frame during a spin, convert a fraction of the car's linear
 ## kinetic energy into rotational kinetic energy.  `rotation_efficiency`
-## is the fraction of linear KE transferred per second.
-##
-## This naturally couples forward speed to spin speed: faster → more
-## rotation, and the car decelerates as linear energy is bled away.
-func _transfer_linear_to_rotational(delta: float, p: Resource) -> void:
-	var efficiency = _g(p, "rotation_efficiency", 1.5)
+## is the fraction transferred each frame — linear energy gets depleted
+## by that amount, so the car slows down.
+func _transfer_linear_to_rotational(_delta: float, p: Resource) -> void:
+	var efficiency = _g(p, "rotation_efficiency", 0.03)
 	if efficiency <= 0.0:
 		return
 
@@ -201,18 +199,18 @@ func _transfer_linear_to_rotational(delta: float, p: Resource) -> void:
 	if v < 1.0:
 		return   # too slow for meaningful transfer
 
-	# Linear KE → transfer a fraction per second → rotational KE.
+	# Transfer a fraction of current linear KE to rotational KE.
 	var E_lin = 0.5 * mass * v * v
-	var E_transfer = E_lin * efficiency * delta
+	var E_transfer = E_lin * efficiency
 	if E_transfer <= 0.0:
 		return
 
-	# Reduce linear speed by the transferred energy.
+	# Linear speed drops by the transferred energy.
 	var E_lin_new = E_lin - E_transfer
 	var v_new = sqrt(maxf(0.0, 2.0 * E_lin_new / mass))
 	velocity = velocity.normalized() * v_new
 
-	# Add the transferred energy to rotational energy.
+	# Rotational speed increases by the transferred energy.
 	var E_rot_current = 0.5 * I * spin_angular_velocity * spin_angular_velocity
 	var E_rot_new = E_rot_current + E_transfer
 	spin_angular_velocity = sqrt(2.0 * E_rot_new / I)

@@ -31,10 +31,10 @@ extends Resource
 ## when the turn key is released (spin exit).
 @export var spin_velocity_drag: float = 0.97
 
-## Fraction of linear kinetic energy converted to rotational kinetic
-## energy per second during a spin.  1.0 = 100 % of linear KE transferred
-## per second, which drops speed to ~61 % and feeds rotation proportionally.
-@export var rotation_efficiency: float = 1.5
+## Fraction of current linear kinetic energy converted to rotational
+## kinetic energy each physics frame during a spin.  0.03 = 3 % per frame.
+## Linear energy is depleted by this amount, so the car slows down.
+@export var rotation_efficiency: float = 0.08
 
 # ── Speed floors ──────────────────────────────────────────────────────────
 
