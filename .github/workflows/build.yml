@@ -30,21 +30,47 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Export Templates
+      - name: Setup & Diagnostics
         run: |
-          mkdir -v -p ~/.local/share/godot/export_templates/
-          mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          echo "=== HOME ==="
+          echo "HOME=$HOME"
+          echo "USER=$(whoami)"
+          echo "=== GODOT VERSION ==="
+          godot --version
+          echo "=== EXPORT TEMPLATES (source) ==="
+          ls -la /root/.local/share/godot/export_templates/ 2>/dev/null || echo "(no /root templates)"
+          ls -la $HOME/.local/share/godot/export_templates/ 2>/dev/null || echo "(no HOME templates)"
+          echo "=== MOVING TEMPLATES ==="
+          mkdir -v -p $HOME/.local/share/godot/export_templates/
+          if [ -d "/root/.local/share/godot/export_templates/${GODOT_VERSION}.stable" ]; then
+            mv -v /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable $HOME/.local/share/godot/export_templates/
+          elif [ -d "/root/.local/share/godot/export_templates/${GODOT_VERSION}" ]; then
+            mv -v /root/.local/share/godot/export_templates/${GODOT_VERSION} $HOME/.local/share/godot/export_templates/
+          fi
+          echo "=== AFTER MOVE ==="
+          ls -la $HOME/.local/share/godot/export_templates/
+          ls -la $HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/ 2>/dev/null || ls -la $HOME/.local/share/godot/export_templates/${GODOT_VERSION}/ 2>/dev/null || echo "(no version dir)"
 
       - name: Pre-heat Import Cache
-        run: godot --headless --editor --quit || true
+        run: |
+          godot --headless --editor --quit || true
+          echo "=== IMPORT CACHE ==="
+          ls -la .godot/ 2>/dev/null || echo "(no .godot)"
 
       - name: Web Build
         run: |
+          set -x
+          pwd
+          ls -la project.godot 2>/dev/null || echo "(no project.godot here)"
           mkdir -v -p build/web
           EXPORT_DIR="$(readlink -f build)"
-          godot --headless --verbose --export-release "Web" "$EXPORT_DIR/web/index.html"
+          echo "EXPORT_DIR=$EXPORT_DIR"
+          godot --headless --verbose --export-release "Web" "$EXPORT_DIR/web/index.html" 2>&1
+          echo "=== BUILD OUTPUT ==="
+          ls -lh build/web/
 
       - name: Upload Artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: web-build
