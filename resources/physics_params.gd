@@ -11,6 +11,11 @@ extends Resource
 @export var car_mass: float = 1000.0
 
 # ── Spin ──────────────────────────────────────────────────────────────────
+## Angular mass (moment of inertia, arbitrary units).  Higher values make
+## the car harder to spin (more rotational KE needed for the same angular
+## velocity).  Roughly analogous to `car_mass` but for rotation.
+@export var angular_mass: float = 1500.0
+
 ## Angular‑velocity multiplier per 60‑FPS physics tick while spinning
 ## (0.0 – 1.0).  The spin speed is set once on entry via kinetic‑energy
 ## transfer (linear KE → rotational KE), then dragged each frame.

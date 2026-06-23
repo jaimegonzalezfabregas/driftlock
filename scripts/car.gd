@@ -195,11 +195,7 @@ func _transfer_linear_to_rotational(delta: float, p: Resource) -> void:
 		return
 
 	var mass = _g(p, "car_mass", 1000.0)
-	var car_w = _g(p, "car_width", 36.0)
-	var car_h = _g(p, "car_height", 20.0)
-
-	# Moment of inertia for a rectangle about its centre.
-	var I = (1.0 / 12.0) * mass * (car_w * car_w + car_h * car_h)
+	var I = _g(p, "angular_mass", 1500.0)    # moment of inertia
 
 	var v = velocity.length()
 	if v < 1.0:
