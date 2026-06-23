@@ -30,20 +30,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Export Templates
+      - name: Setup
         run: |
-          mkdir -p $HOME/.local/share/godot/export_templates/
+          mkdir -p ~/.local/share/godot/export_templates/
           if [ -d "/root/.local/share/godot/export_templates/${GODOT_VERSION}.stable" ]; then
-            mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable $HOME/.local/share/godot/export_templates/
+            mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/
           fi
-
-      - name: Pre-heat Import Cache
-        run: godot --headless --editor --quit || true
 
       - name: Web Build
         run: |
           mkdir -p build/web
           EXPORT_DIR="$(readlink -f build)"
+          cd "$GITHUB_WORKSPACE"
           godot --headless --export-release "Web" "$EXPORT_DIR/web/index.html"
 
       - name: Upload Pages Artifact
@@ -52,7 +50,6 @@ jobs:
           path: build/web/
 
   deploy-pages:
-    name: Deploy to GitHub Pages
     if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
     needs: export-web
     runs-on: ubuntu-24.04
