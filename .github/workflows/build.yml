@@ -11,9 +11,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  GODOT_VERSION: 4.5.2
-
 permissions:
   contents: read
   pages: write
@@ -36,8 +33,7 @@ jobs:
       - name: Export Web Release
         run: |
           mkdir -p build/web
-          godot --headless --export-release "Web" build/web/index.html
-          ls -lh build/web/
+          godot --headless --verbose --path "$GITHUB_WORKSPACE" --export-release "Web" "$GITHUB_WORKSPACE/build/web/index.html"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
