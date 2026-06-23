@@ -18,6 +18,7 @@ var _test_input_right: bool = false
 var _accept_keyboard_input: bool = true
 var _PP = preload("res://resources/physics_params.gd")
 var _local_params: Resource = null
+var _track_builder: Node = null  # set by level_base after spawn
 
 signal state_changed(new_state: State)
 signal wall_hit()
@@ -227,6 +228,11 @@ func _transfer_linear_to_rotational(_delta: float, p: Resource) -> void:
 	var efficiency = _g(p, "rotation_efficiency", 0.03)
 	if efficiency <= 0.0:
 		return
+
+	# Spin zone bonus — check if car is inside a coloured track section.
+	if _track_builder and _track_builder.has_method("get_spin_zone_factor"):
+		var factor = _track_builder.get_spin_zone_factor(global_position) as float
+		efficiency *= factor
 
 	var mass = _g(p, "car_mass", 1000.0)
 	var I = _g(p, "angular_mass", 1500.0)    # moment of inertia

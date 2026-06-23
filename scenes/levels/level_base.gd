@@ -86,6 +86,8 @@ func _spawn_car(pos: Vector2, rot: float) -> void:
 	_car.global_position = pos
 	_car.global_rotation = rot
 	_car.wall_hit.connect(_on_wall_hit)
+	# Give the car a reference to the TrackBuilder for spin‑zone queries.
+	_car.set("_track_builder", $TrackPath)
 	add_child(_car)
 
 

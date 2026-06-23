@@ -58,6 +58,14 @@ const _PP := preload("res://resources/physics_params.gd")
 ## Checkerboard colour 2 (darker).
 @export var checker_color_2: Color = Color(0.15, 0.15, 0.15, 1.0)
 
+## Spin zones — coloured track sections where the car builds
+## spin energy more efficiently.  Each Dictionary should have:
+##   start_offset (float)  — baked distance where zone begins
+##   end_offset   (float)  — baked distance where zone ends
+##   factor       (float)  — multiplier for rotation_efficiency
+##   color        (Color)  — highlight colour (alpha works)
+@export var spin_zones: Array[Dictionary] = []
+
 # ═════════════════════════════════════════════════════════════════════
 # Public state (set by _build_collision at runtime)
 # ═════════════════════════════════════════════════════════════════════
@@ -102,6 +110,10 @@ func _draw() -> void:
 	# ── Finish section (checkerboard) ──────────────────────────────
 	if finish_section_length > 0.0:
 		_draw_finish_checkerboard(bl, half)
+
+	# ── Spin zones (coloured track overlays) ────────────────────
+	if spin_zones.size() > 0:
+		_draw_spin_zones(bl, half, fill_step)
 
 	# ── Edge lines: exact collision‑boundary vertices ──────────────
 	# Only draw segments whose midpoint is close to a REMOTE
@@ -237,6 +249,78 @@ func _draw_grid_slot(half: float) -> void:
 	draw_line(fl, bl, grid_slot_color, grid_slot_line_width)
 	draw_line(fr, br, grid_slot_color, grid_slot_line_width)
 	# Back is NOT drawn — open end.
+
+
+# ═════════════════════════════════════════════════════════════════════
+# Spin zones
+# ═════════════════════════════════════════════════════════════════════
+
+## Draw colour overlays for each spin zone along the track.
+func _draw_spin_zones(bl: float, half: float, step: float) -> void:
+	for z in spin_zones:
+		var start_ofs := z.get("start_offset", 0.0) as float
+		var end_ofs := z.get("end_offset", 1000.0) as float
+		var color := z.get("color", Color(0.2, 0.5, 1.0, 0.25)) as Color
+
+		if start_ofs >= bl or end_ofs <= 0.0 or end_ofs <= start_ofs:
+			continue
+
+		var t := maxf(start_ofs, 0.0)
+		var end := minf(end_ofs, bl)
+		var prev_left := Vector2.ZERO
+		var prev_right := Vector2.ZERO
+		var first := true
+
+		while t < end:
+			var xf := curve.sample_baked_with_rotation(t)
+			var fwd := Vector2.RIGHT.rotated(xf.get_rotation())
+			var nrm := fwd.rotated(PI * 0.5)
+			var l := xf.origin - nrm * half
+			var r := xf.origin + nrm * half
+
+			if not first:
+				var poly := PackedVector2Array([prev_left, l, r, prev_right])
+				draw_colored_polygon(poly, color)
+
+			prev_left = l
+			prev_right = r
+			first = false
+			t += step
+
+
+## Returns the bonus multiplier for the given world position.
+## Returns 1.0 (no bonus) if the position is not inside any spin zone.
+## Called by car.gd each physics frame.
+func get_spin_zone_factor(global_pos: Vector2) -> float:
+	if spin_zones.is_empty() or curve == null:
+		return 1.0
+
+	var local_pos := to_local(global_pos)
+	var half := track_width * 0.5
+	var bl := curve.get_baked_length()
+	if bl <= 0.0:
+		return 1.0
+
+	# Coarse sweep of centreline points — every 40 px.
+	# This avoids needing a closest‑point query on the curve.
+	var step := 40.0
+	var t := 0.0
+	while t <= bl:
+		var xf := curve.sample_baked_with_rotation(t)
+		var d_sq := xf.origin.distance_squared_to(local_pos)
+		var threshold_sq := half * half * 0.64   # 80% of corridor width
+
+		if d_sq < threshold_sq:
+			# Found a nearby point — check if its baked offset is in any zone.
+			for z in spin_zones:
+				var zs := z.get("start_offset", 0.0) as float
+				var ze := z.get("end_offset", 1000.0) as float
+				if t >= zs and t <= ze:
+					var factor := z.get("factor", 2.0) as float
+					return maxf(factor, 1.0)
+		t += step
+
+	return 1.0
 
 
 # ═════════════════════════════════════════════════════════════════════

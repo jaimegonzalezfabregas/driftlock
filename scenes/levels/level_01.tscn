@@ -18,3 +18,14 @@ curve = SubResource("Curve2D_m802k")
 script = ExtResource("2")
 track_width = 220
 segment_distance = 25
+spin_zones = [{
+"start_offset": 3000.0,
+"end_offset": 5500.0,
+"factor": 2.5,
+"color": Color(0.2, 0.5, 1.0, 0.25)
+}, {
+"start_offset": 7500.0,
+"end_offset": 10000.0,
+"factor": 2.5,
+"color": Color(1.0, 0.3, 0.3, 0.25)
+}]
