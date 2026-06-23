@@ -32,21 +32,15 @@ jobs:
 
       - name: Setup
         run: |
-          mkdir -p ~/.local/share/godot/export_templates/
-          if [ -d "/root/.local/share/godot/export_templates/${GODOT_VERSION}.stable" ]; then
-            mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/
-          fi
-
-      - name: Debug
-        run: |
-          pwd
-          ls -la
-          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
           echo "HOME=$HOME"
-          ls ~/.local/share/godot/export_templates/
+          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+          ls -la /root/.local/share/godot/export_templates/ 2>/dev/null || echo "no root templates"
+          ls -la ~/.local/share/godot/export_templates/ 2>/dev/null || echo "no home templates"
           godot --version
 
       - name: Web Build
+        env:
+          HOME: /root
         run: |
           mkdir -p /tmp/export/web
           godot --headless --path "$GITHUB_WORKSPACE" --export-release "Web" /tmp/export/web/index.html 2>&1
