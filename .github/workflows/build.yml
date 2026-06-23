@@ -43,9 +43,23 @@ jobs:
           HOME: /root
         run: |
           mkdir -p /tmp/export/web
-          godot --headless --path "$GITHUB_WORKSPACE" --export-release "Web" /tmp/export/web/index.html 2>&1
+          godot --headless --verbose --path "$GITHUB_WORKSPACE" --export-release "Web" /tmp/export/web/index.html > /tmp/godot_output.txt 2>&1
+          EXIT_CODE=$?
+          echo "GODOT_EXIT_CODE=$EXIT_CODE"
+          if [ $EXIT_CODE -ne 0 ]; then
+            cat /tmp/godot_output.txt | tail -100
+          fi
+          exit $EXIT_CODE
+
+      - name: Upload Godot Output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-output
+          path: /tmp/godot_output.txt
 
       - name: Upload Pages Artifact
+        if: success()
         uses: actions/upload-pages-artifact@v3
         with:
           path: /tmp/export/web/
