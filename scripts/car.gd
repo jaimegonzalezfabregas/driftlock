@@ -183,30 +183,43 @@ func _spin(delta: float, p: Resource) -> void:
 	velocity *= pow(vel_drag, delta * 60.0)
 
 
-## Each frame during a spin, convert a fraction of forward speed into
-## angular velocity.  `rotation_power` controls the transfer rate:
-## higher values = more rotation from speed, which also decelerates
-## the car faster.
+## Each frame during a spin, convert a fraction of the car's linear
+## kinetic energy into rotational kinetic energy.  `rotation_efficiency`
+## is the fraction of linear KE transferred per second.
+##
+## This naturally couples forward speed to spin speed: faster → more
+## rotation, and the car decelerates as linear energy is bled away.
 func _transfer_linear_to_rotational(delta: float, p: Resource) -> void:
-	var power = _g(p, "rotation_power", 0.3)
-	if power <= 0.0:
+	var efficiency = _g(p, "rotation_efficiency", 1.5)
+	if efficiency <= 0.0:
 		return
 
-	var forward := Vector2.RIGHT.rotated(global_rotation)
-	var fwd_speed = forward.dot(velocity)
-	if fwd_speed <= 0.0:
-		return
-
-	# Transfer a fraction of forward speed to angular velocity.
-	var transfer = fwd_speed * power * delta
-	velocity -= forward * transfer
-
-	# Convert linear speed loss to angular velocity gain.
-	# Ratio: angular_vel_gain = transfer / r_eff  where r_eff is an
-	# effective radius derived from car width (wider car → more leverage).
+	var mass = _g(p, "car_mass", 1000.0)
 	var car_w = _g(p, "car_width", 36.0)
-	var r_eff = car_w * 0.5
-	spin_angular_velocity += transfer / r_eff
+	var car_h = _g(p, "car_height", 20.0)
+
+	# Moment of inertia for a rectangle about its centre.
+	var I = (1.0 / 12.0) * mass * (car_w * car_w + car_h * car_h)
+
+	var v = velocity.length()
+	if v < 1.0:
+		return   # too slow for meaningful transfer
+
+	# Linear KE → transfer a fraction per second → rotational KE.
+	var E_lin = 0.5 * mass * v * v
+	var E_transfer = E_lin * efficiency * delta
+	if E_transfer <= 0.0:
+		return
+
+	# Reduce linear speed by the transferred energy.
+	var E_lin_new = E_lin - E_transfer
+	var v_new = sqrt(maxf(0.0, 2.0 * E_lin_new / mass))
+	velocity = velocity.normalized() * v_new
+
+	# Add the transferred energy to rotational energy.
+	var E_rot_current = 0.5 * I * spin_angular_velocity * spin_angular_velocity
+	var E_rot_new = E_rot_current + E_transfer
+	spin_angular_velocity = sqrt(2.0 * E_rot_new / I)
 
 
 func start_race() -> void:

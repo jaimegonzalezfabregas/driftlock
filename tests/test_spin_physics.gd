@@ -146,7 +146,7 @@ func _test_uniform_velocity_drag_during_spin() -> void:
 	var p = _P()
 	if p != null:
 		p.set("spin_velocity_drag", 0.90)
-		p.set("rotation_power", 0.0)
+		p.set("rotation_efficiency", 0.0)
 
 	# Position in open space, set an initial velocity in any direction.
 	_car.global_position = Vector2(500, 500)
@@ -256,7 +256,7 @@ func _test_spin_angular_velocity_dragged() -> void:
 	# from drag (no speed-to-rotation injection).
 	var p = _P()
 	if p != null:
-		p.set("rotation_power", 0.0)
+		p.set("rotation_efficiency", 0.0)
 
 	# Manually set a high angular velocity
 	_car.set("spin_direction", 1)

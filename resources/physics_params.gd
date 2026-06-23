@@ -5,7 +5,7 @@ extends Resource
 ## Engine power (W).  Kinetic energy increases by P·Δt each frame.
 ## Acceleration naturally decreases with speed: v = sqrt(2·E/m).
 ## Higher values = faster acceleration at all speeds.
-@export var engine_power: float = 300_000_000.0
+@export var engine_power: float = 200_000_000.0
 
 ## Car mass (arbitrary units).  Higher mass = slower acceleration from same power.
 @export var car_mass: float = 1000.0
@@ -26,14 +26,14 @@ extends Resource
 ## when the turn key is released (spin exit).
 @export var spin_velocity_drag: float = 0.97
 
-## Fraction of forward speed converted to angular velocity per second
-## during a spin.  Higher values = more rotation from forward speed,
-## which also slows the car down faster during spins.
-@export var rotation_power: float = 1
+## Fraction of linear kinetic energy converted to rotational kinetic
+## energy per second during a spin.  1.0 = 100 % of linear KE transferred
+## per second, which drops speed to ~61 % and feeds rotation proportionally.
+@export var rotation_efficiency: float = 1.5
 
 # ── Speed floors ──────────────────────────────────────────────────────────
 
-@export var min_linear_speed: float = 150
+@export var min_linear_speed: float = 10
 
 @export var min_spin_rate: float = 0.5
 
