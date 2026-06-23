@@ -21,7 +21,7 @@ const _PP := preload("res://resources/physics_params.gd")
 # ═════════════════════════════════════════════════════════════════════
 
 ## Track clear corridor width (px).
-@export var track_width: float = 200.0
+@export var track_width: float = 300.0
 
 ## Spacing between consecutive collision‑edge vertices (px along curve).
 ## Larger values = fewer edges but coarser approximation.

@@ -14,6 +14,9 @@ const GOAL_THICKNESS: float = 10.0
 var _car: Node = null
 var _game_over: bool = false
 var _camera: Camera2D = null
+var _hud_layer: CanvasLayer = null
+var _boost_bar_bg: ColorRect = null
+var _boost_bar_fill: ColorRect = null
 
 
 func _ready() -> void:
@@ -31,6 +34,7 @@ func _ready() -> void:
 	_level_specific_setup(path.curve)
 	_spawn_car(start_pos, start_dir.angle())
 	_setup_camera()
+	_setup_hud()
 
 	if _car:
 		_car.start_race()
@@ -84,6 +88,33 @@ func _setup_camera() -> void:
 	add_child(_camera)
 
 
+func _setup_hud() -> void:
+	_hud_layer = CanvasLayer.new()
+	_hud_layer.layer = 10
+	add_child(_hud_layer)
+
+	var bar_w := 200.0
+	var bar_h := 14.0
+	var margin := 20.0
+	var view := _hud_layer.get_viewport().get_visible_rect().size if _hud_layer.get_viewport() else Vector2(1152, 648)
+
+	var bg := ColorRect.new()
+	bg.name = "BoostBarBg"
+	bg.size = Vector2(bar_w, bar_h)
+	bg.position = Vector2(view.x * 0.5 - bar_w * 0.5, view.y - margin - bar_h)
+	bg.color = Color(0.2, 0.2, 0.2, 0.7)
+	_hud_layer.add_child(bg)
+	_boost_bar_bg = bg
+
+	var fill := ColorRect.new()
+	fill.name = "BoostBarFill"
+	fill.size = Vector2(bar_w, bar_h)
+	fill.position = bg.position
+	fill.color = Color(1.0, 0.6, 0.0, 0.9)  # orange
+	_hud_layer.add_child(fill)
+	_boost_bar_fill = fill
+
+
 # ---------------------------------------------------------------------------
 # Per-frame
 # ---------------------------------------------------------------------------
@@ -98,6 +129,12 @@ func _process(delta: float) -> void:
 
 		const LOOK_AHEAD := -30.0
 		_camera.global_position = car.global_position + forward * LOOK_AHEAD
+
+	# Boost bar — read spin_energy from the car (0–1).
+	if _boost_bar_fill and is_instance_valid(_car):
+		var se: float = _car.get("spin_energy") if _car.has_method("get") else 0.0
+		var bw = _boost_bar_bg.size.x
+		_boost_bar_fill.size.x = bw * clampf(se, 0.0, 1.0)
 
 
 # ---------------------------------------------------------------------------

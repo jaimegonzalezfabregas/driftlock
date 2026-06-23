@@ -8,6 +8,10 @@ var spin_angular_velocity: float = 0.0   # rad/s
 var spin_timer: float = 0.0              # seconds spent in current spin
 var accelerate_timer: float = 0.0        # seconds spent in current accelerate
 var current_speed: float = 0.0
+var spin_energy: float = 0.0            # normalised 0–1 for UI
+
+var _last_boost: float = 0.0            # most recent boost amount (for FX)
+var _boost_flash_timer: float = 0.0     # seconds remaining of boost flash
 
 var _test_input_left: bool = false
 var _test_input_right: bool = false
@@ -17,6 +21,7 @@ var _local_params: Resource = null
 
 signal state_changed(new_state: State)
 signal wall_hit()
+signal boost_applied(amount: float)
 
 
 func _g(p: Resource, key: String, default = null):
@@ -93,6 +98,12 @@ func _physics_process(delta: float) -> void:
 
 	current_speed = velocity.length()
 
+	# Normalised spin energy (0–1) for UI / visual feedback.
+	spin_energy = clampf(spin_angular_velocity / 80.0, 0.0, 1.0)
+
+	if _boost_flash_timer > 0.0:
+		_boost_flash_timer -= delta
+
 	if get_last_slide_collision():
 		var col := get_last_slide_collision()
 		if col.get_collider() is StaticBody2D:
@@ -133,6 +144,18 @@ func _handle_input() -> void:
 			var fwd := Vector2.RIGHT.rotated(global_rotation)
 			var fwd_speed = fwd.dot(velocity)
 			velocity = fwd * fwd_speed
+
+			# SPIN‑TO‑WIN: convert accumulated rotational energy to speed boost.
+			var p_exit = P()
+			var boost_mult = _g(p_exit, "spin_boost_multiplier", 3.0)
+			var boost_cap = _g(p_exit, "spin_boost_cap", 600.0)
+			var boost = minf(spin_angular_velocity * boost_mult, boost_cap)
+			if boost > 0.0:
+				velocity += fwd * boost
+				_last_boost = boost
+				_boost_flash_timer = 0.2
+				boost_applied.emit(boost)
+
 			car_state = State.ACCELERATE
 			accelerate_timer = 0.0
 			spin_direction = 0
@@ -262,12 +285,25 @@ func _draw() -> void:
 	var dh = _g(p, "car_draw_height", 24.0) if p else 24.0
 
 	var rect := Rect2(-dw/2, -dh/2, dw, dh)
-	draw_rect(rect, Color.WHITE)
+
+	# Body colour: white at rest, yellow→orange→red as spin energy builds.
+	var body_color := Color.WHITE
+	if spin_energy > 0.0:
+		var e := spin_energy
+		body_color = Color(1.0, 1.0 - e * 0.6, 1.0 - e * 0.8)  # white → red
+
+	# Boost flash overrides everything.
+	if _boost_flash_timer > 0.0:
+		body_color = Color(1.0, 1.0, 0.6)  # bright yellow flash
+
+	draw_rect(rect, body_color)
 
 	var tip = Vector2(dw/2 + 2, 0)
 	var l = Vector2(dw/2 - 6, -dh/4)
 	var r = Vector2(dw/2 - 6, dh/4)
 	draw_colored_polygon(PackedVector2Array([tip, l, r]), Color(0.85, 0.85, 0.85))
 
+	# Spin border: red outline while spinning, intensity matches energy.
 	if car_state == State.SPINNING:
-		draw_rect(rect, Color.RED, false, 2.0)
+		var border := Color(1.0, 1.0 - spin_energy, 1.0 - spin_energy)
+		draw_rect(rect, border, false, 2.0)

@@ -47,6 +47,14 @@ extends Resource
 ## Linear energy is depleted by this amount, so the car slows down.
 @export var rotation_efficiency: float = 0.08
 
+## Speed boost applied on spin exit: boost = spin_angular_velocity × multiplier.
+## Higher values = bigger speed burst after spinning, rewarding longer spins.
+@export var spin_boost_multiplier: float = 3.0
+
+## Maximum boost speed added on spin exit (px/s).  Prevents absurd speeds
+## from very long/high-energy spins.
+@export var spin_boost_cap: float = 600.0
+
 # ── Speed floors ──────────────────────────────────────────────────────────
 
 @export var min_linear_speed: float = 10
