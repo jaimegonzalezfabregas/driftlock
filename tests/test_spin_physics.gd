@@ -77,21 +77,6 @@ func _speed() -> float:
 	return _car.get("current_speed")
 
 
-func _fwd_speed() -> float:
-	if _car == null:
-		return -1.0
-	var fwd := Vector2.RIGHT.rotated(_car.global_rotation)
-	return fwd.dot(_car.get("velocity"))
-
-
-func _side_speed() -> float:
-	if _car == null:
-		return -1.0
-	var fwd := Vector2.RIGHT.rotated(_car.global_rotation)
-	var side := fwd.rotated(PI * 0.5)
-	return side.dot(_car.get("velocity"))
-
-
 func _spin_ang_vel() -> float:
 	if _car == null:
 		return 0.0
@@ -209,11 +194,15 @@ func _test_sideways_grip_on_exit() -> void:
 
 	# Enter spin
 	_press(true, false)
+	# Wait 5 frames to establish the spin
 	await _frames(5)
 
 	# Capture velocity during spin
 	var vel_during = _car.get("velocity")
-	var rot_during = _car.global_rotation
+
+	# Wait for minimum spin duration to elapse before releasing.
+	# spin_min_time is 1.0 s by default, so wait ~65 frames total from entry.
+	await _frames(60)
 
 	# Release spin — sideways grip engages
 	_press(false, false)
