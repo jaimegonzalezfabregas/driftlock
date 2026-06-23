@@ -10,9 +10,6 @@ extends Resource
 ## Car mass (arbitrary units).  Higher mass = slower acceleration from same power.
 @export var car_mass: float = 1000.0
 
-## Starting speed when the race begins (px/s).
-@export var initial_speed: float = 500.0
-
 # ── Spin ──────────────────────────────────────────────────────────────────
 ## Angular‑velocity multiplier per 60‑FPS physics tick while spinning
 ## (0.0 – 1.0).  The spin speed is set once on entry via kinetic‑energy
@@ -20,7 +17,7 @@ extends Resource
 @export var spin_drag: float = 0.97
 
 ## Minimum rotation speed (rad/s) while spinning, even at zero velocity.
-@export var min_spin_rate: float = 3
+@export var min_spin_rate: float = 1
 
 ## Minimum spin duration (seconds).  The car spins for at least this long
 ## after entering a spin, even if the turn key is released early.
@@ -35,7 +32,7 @@ extends Resource
 # ── Speed floors ──────────────────────────────────────────────────────────
 ## Minimum linear speed floor (px/s).  Applied every frame regardless of
 ## state — clamps total velocity magnitude so the car never stalls.
-@export var min_linear_speed: float = 50.0
+@export var min_linear_speed: float = 200.0
 
 # ── Car shape ─────────────────────────────────────────────────────────────
 ## Collision shape width (px).

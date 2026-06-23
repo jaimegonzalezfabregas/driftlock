@@ -13,6 +13,7 @@ concurrency:
 
 env:
   GODOT_VERSION: 4.5.2
+  PROJECT_PATH: .
 
 permissions:
   contents: read
@@ -37,22 +38,12 @@ jobs:
 
       - name: Web Build
         run: |
-          cd "$GITHUB_WORKSPACE"
           mkdir -v -p build/web
           EXPORT_DIR="$(readlink -f build)"
-          godot --headless --verbose --export-release "Web" "$EXPORT_DIR/web/index.html"
-
-      - name: Upload Godot Output
-        if: failure()
-        run: |
-          echo "pwd=$(pwd)"
-          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
-          ls -la "$GITHUB_WORKSPACE" 2>/dev/null
-          ls -la /root/.local/share/godot/export_templates/ 2>/dev/null
-          ls -la ~/.local/share/godot/export_templates/ 2>/dev/null
+          cd $PROJECT_PATH
+          godot --headless --verbose --export-release "Web" "$EXPORT_DIR/web/index.html" 2>&1 || echo "GODOT_EXIT_CODE=$?"
 
       - name: Upload Pages Artifact
-        if: success()
         uses: actions/upload-pages-artifact@v3
         with:
           path: build/web/
