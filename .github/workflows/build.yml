@@ -13,7 +13,6 @@ concurrency:
 
 env:
   GODOT_VERSION: 4.5.2
-  PROJECT_PATH: .
 
 permissions:
   contents: read
@@ -38,15 +37,17 @@ jobs:
 
       - name: Web Build
         run: |
+          cd "$GITHUB_WORKSPACE"
           mkdir -v -p build/web
           EXPORT_DIR="$(readlink -f build)"
-          cd $PROJECT_PATH
           godot --headless --verbose --export-release "Web" "$EXPORT_DIR/web/index.html"
 
       - name: Upload Godot Output
         if: failure()
         run: |
-          cat /root/.local/share/godot/export_templates/ 2>/dev/null
+          echo "pwd=$(pwd)"
+          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+          ls -la "$GITHUB_WORKSPACE" 2>/dev/null
           ls -la /root/.local/share/godot/export_templates/ 2>/dev/null
           ls -la ~/.local/share/godot/export_templates/ 2>/dev/null
 

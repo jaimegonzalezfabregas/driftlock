@@ -80,16 +80,6 @@ func _physics_process(delta: float) -> void:
 			_spin(delta, p)
 
 	move_and_slide()
-
-	# Speed floor: every frame, regardless of state, push the car forward
-	# so the forward component never drops below min_linear_speed.
-	# This prevents stall after a spin without any state‑dependent logic.
-	var min_speed = _g(p, "min_linear_speed", 50.0)
-	var forward := Vector2.RIGHT.rotated(global_rotation)
-	var fwd_speed = forward.dot(velocity)
-	if fwd_speed < min_speed:
-		velocity += forward * (min_speed - fwd_speed)
-
 	current_speed = velocity.length()
 
 	if get_last_slide_collision():
@@ -159,8 +149,12 @@ func _accelerate(delta: float, p: Resource) -> void:
 	var fwd_impulse = forward * accel * delta
 	velocity += fwd_impulse
 
-	# Note: speed floor is applied globally in _physics_process via
-	# min_linear_speed, so the car can never stall regardless of state.
+	# Floor: never drop below min forward speed while accelerating.
+	# Recalculate forward speed after impulse.
+	fwd_speed = forward.dot(velocity)
+	var min_speed = _g(p, "min_linear_speed", 50.0)
+	if fwd_speed < min_speed:
+		velocity += forward * (min_speed - fwd_speed)
 
 
 func _spin(delta: float, p: Resource) -> void:
