@@ -6,6 +6,7 @@ var car_state: State = State.ACCELERATE
 var spin_direction: int = 0
 var spin_angular_velocity: float = 0.0   # rad/s
 var spin_timer: float = 0.0              # seconds spent in current spin
+var accelerate_timer: float = 0.0        # seconds spent in current accelerate
 var current_speed: float = 0.0
 
 var _test_input_left: bool = false
@@ -75,6 +76,7 @@ func _physics_process(delta: float) -> void:
 
 	match car_state:
 		State.ACCELERATE:
+			accelerate_timer += delta
 			_accelerate(delta, p)
 		State.SPINNING:
 			_spin(delta, p)
@@ -117,7 +119,8 @@ func _handle_input() -> void:
 	var wants_spin = (j or l) and not (j and l)
 
 	if car_state == State.ACCELERATE:
-		if wants_spin:
+		var min_time = _g(P(), "min_accelerate_time", 0.0)
+		if wants_spin and accelerate_timer >= min_time:
 			spin_direction = -1 if j else 1
 			spin_timer = 0.0
 			spin_angular_velocity = _g(P(), "min_spin_rate", 0.5)
@@ -131,6 +134,7 @@ func _handle_input() -> void:
 			var fwd_speed = fwd.dot(velocity)
 			velocity = fwd * fwd_speed
 			car_state = State.ACCELERATE
+			accelerate_timer = 0.0
 			spin_direction = 0
 			spin_angular_velocity = 0.0
 			spin_timer = 0.0

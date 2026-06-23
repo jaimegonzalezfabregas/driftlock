@@ -29,7 +29,12 @@ extends Resource
 
 ## Minimum spin duration (seconds).  The car spins for at least this long
 ## after entering a spin, even if the turn key is released early.
-@export var spin_min_time: float = 0.2
+@export var spin_min_time: float = 0.5
+
+## Minimum accelerate duration (seconds).  After exiting a spin the car
+## must accelerate for at least this long before it can spin again.
+## Prevents rapid spin↔accelerate flickering.
+@export var min_accelerate_time: float = 0.5
 
 ## Uniform velocity multiplier per 60‑FPS physics tick during spin
 ## (0.0 – 1.0).  Drag is equal in all directions so the car slides
@@ -63,7 +68,7 @@ extends Resource
 
 # ── Wall collision ────────────────────────────────────────────────────────
 ## If true, car bounces off walls instead of dying (test-friendly).
-@export var wall_bounce: bool = true
+@export var wall_bounce: bool = false
 
 ## Bounce restitution when wall_bounce is true (0.0 = stop, 1.0 = full bounce).
 @export var wall_bounce_restitution: float = 0.3

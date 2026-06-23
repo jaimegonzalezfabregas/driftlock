@@ -51,11 +51,10 @@ func _ensure_game_state() -> void:
 		gs.set_script(GameStateScript)
 		var p := preload("res://resources/physics_params.gd").new()
 		p.set("wall_bounce", false)
+		p.set("min_accelerate_time", 0.0)  # no minimum time for tests
 		gs.set("physics_params", p)
 		gs.set("accept_keyboard_input", false)
 		Engine.register_singleton("GameState", gs)
-
-	# Ensure wall_bounce=false so the car dies on wall hit (we block walls with test position).
 
 
 func _spawn_car() -> Node:
