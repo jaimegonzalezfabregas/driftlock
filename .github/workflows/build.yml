@@ -11,6 +11,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  GODOT_VERSION: 4.5.2
+
 permissions:
   contents: read
   pages: write
@@ -19,7 +22,7 @@ permissions:
 jobs:
   export-web:
     name: Export to HTML5
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: barichello/godot-ci:4.5.2
 
@@ -27,13 +30,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Pre-heat Import Cache
-        run: godot --headless --editor --quit --path . || true
-
-      - name: Export Web Release
+      - name: Setup Export Templates
         run: |
-          mkdir -p build/web
-          godot --headless --verbose --path "$GITHUB_WORKSPACE" --export-release "Web" "$GITHUB_WORKSPACE/build/web/index.html"
+          mkdir -v -p ~/.local/share/godot/export_templates/
+          mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+
+      - name: Pre-heat Import Cache
+        run: godot --headless --editor --quit || true
+
+      - name: Web Build
+        run: |
+          mkdir -v -p build/web
+          EXPORT_DIR="$(readlink -f build)"
+          godot --headless --verbose --export-release "Web" "$EXPORT_DIR/web/index.html"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -42,27 +51,9 @@ jobs:
           path: build/web/
           retention-days: 7
 
-  deploy-pages:
-    name: Deploy to GitHub Pages
-    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
-    needs: export-web
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
-    steps:
-      - name: Download Build Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: web-build
-          path: build/web
-
-      - name: Upload Pages Artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: build/web
-
       - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: build/web
