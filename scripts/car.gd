@@ -5,6 +5,7 @@ enum State { ACCELERATE, SPINNING }
 var car_state: State = State.ACCELERATE
 var spin_direction: int = 0
 var spin_angular_velocity: float = 0.0   # rad/s
+var spin_timer: float = 0.0              # seconds spent in current spin
 var current_speed: float = 0.0
 
 var _test_input_left: bool = false
@@ -109,15 +110,21 @@ func _handle_input() -> void:
 	if car_state == State.ACCELERATE:
 		if wants_spin:
 			spin_direction = -1 if j else 1
+			spin_timer = 0.0
 			_transfer_linear_to_rotational(P())
 			car_state = State.SPINNING
 			emit_signal("state_changed", State.SPINNING)
 	elif car_state == State.SPINNING:
-		if not wants_spin:
-			# No snap needed — spin drag already bled off sideways velocity.
+		var min_time = _g(P(), "spin_min_time", 1.0)
+		if not wants_spin and spin_timer >= min_time:
+			# Sideways grip on exit — kill lateral velocity, keep forward momentum.
+			var fwd := Vector2.RIGHT.rotated(global_rotation)
+			var fwd_speed = fwd.dot(velocity)
+			velocity = fwd * fwd_speed
 			car_state = State.ACCELERATE
 			spin_direction = 0
 			spin_angular_velocity = 0.0
+			spin_timer = 0.0
 			emit_signal("state_changed", State.ACCELERATE)
 
 
@@ -151,6 +158,8 @@ func _accelerate(delta: float, p: Resource) -> void:
 
 
 func _spin(delta: float, p: Resource) -> void:
+	spin_timer += delta
+
 	# Drag angular velocity (tire friction during spin).
 	var drag = _g(p, "spin_drag", 0.97)
 	spin_angular_velocity *= pow(drag, delta * 60.0)
@@ -163,23 +172,12 @@ func _spin(delta: float, p: Resource) -> void:
 	# Apply rotation.
 	global_rotation += spin_direction * spin_angular_velocity * delta
 
-	# Decompose linear velocity into forward (along heading) and sideways
-	# (perpendicular) components.  Apply asymmetric drag — heavy sideways
-	# bleed, lighter forward coast — so the car naturally aligns forward
-	# during the spin instead of snapping on exit.
-	var fwd := Vector2.RIGHT.rotated(global_rotation)
-	var side := fwd.rotated(PI * 0.5)
-
-	var fwd_speed = fwd.dot(velocity)
-	var side_speed = side.dot(velocity)
-
-	var fwd_drag = _g(p, "spin_forward_drag", 0.98)
-	var side_drag = _g(p, "spin_sideways_drag", 0.5)
-
-	fwd_speed *= pow(fwd_drag, delta * 60.0)
-	side_speed *= pow(side_drag, delta * 60.0)
-
-	velocity = fwd * fwd_speed + side * side_speed
+	# Uniform velocity drag during spin — equal in all directions.
+	# The car drifts/slides equally in all directions while spinning so it
+	# maintains a straight-line drift.  Sideways grip only engages on spin
+	# exit (when the turn key is released) — see _handle_input().
+	var vel_drag = _g(p, "spin_velocity_drag", 0.85)
+	velocity *= pow(vel_drag, delta * 60.0)
 
 
 ## Convert a fraction of linear kinetic energy to rotational kinetic
@@ -227,6 +225,7 @@ func reset(pos: Vector2, rot: float) -> void:
 	car_state = State.ACCELERATE
 	spin_direction = 0
 	spin_angular_velocity = 0.0
+	spin_timer = 0.0
 	velocity = Vector2.ZERO
 	_test_input_left = false
 	_test_input_right = false

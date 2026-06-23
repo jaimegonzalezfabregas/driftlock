@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites id="2026-06-21" name="report_59" tests="1" failures="0" skipped="0" flaky="0" time="0.000">
+	<testsuite id="0" name="test_track_navigation" package="tests/gdunit4" timestamp="2026-06-21T15:41:20" hostname="localhost" tests="1" failures="0" errors="0" skipped="0" flaky="0" time="10.175">
+		<testcase name="test_drive_through_track_and_win" classname="test_track_navigation" time="10.155">
+		</testcase>
+	</testsuite>
+</testsuites>

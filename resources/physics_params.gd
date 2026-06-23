@@ -22,14 +22,15 @@ extends Resource
 ## Minimum rotation speed (rad/s) while spinning, even at zero velocity.
 @export var min_spin_rate: float = 1.5
 
-## Forward‑velocity multiplier per 60‑FPS physics tick during spin
-## (0.0 – 1.0).  Light drag — the car coasts mostly forward.
-@export var spin_forward_drag: float = 0.98
+## Minimum spin duration (seconds).  The car spins for at least this long
+## after entering a spin, even if the turn key is released early.
+@export var spin_min_time: float = 1.0
 
-## Sideways‑velocity multiplier per 60‑FPS physics tick during spin
-## (0.0 – 1.0).  Heavy drag — sideways drift bleeds off quickly so the
-## velocity aligns with the car heading naturally (no snap on exit).
-@export var spin_sideways_drag: float = 0.5
+## Uniform velocity multiplier per 60‑FPS physics tick during spin
+## (0.0 – 1.0).  Drag is equal in all directions so the car slides
+## in a straight line while spinning.  Sideways grip only engages
+## when the turn key is released (spin exit).
+@export var spin_velocity_drag: float = 0.85
 
 # ── Speed floors ──────────────────────────────────────────────────────────
 ## Minimum forward speed (px/s) while in ACCELERATE state.

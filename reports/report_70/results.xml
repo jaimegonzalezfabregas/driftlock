@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites id="2026-06-21" name="report_70" tests="35" failures="0" skipped="0" flaky="0" time="0.000">
+	<testsuite id="0" name="test_gameplay" package="tests/gdunit4" timestamp="2026-06-21T20:04:57" hostname="localhost" tests="5" failures="0" errors="0" skipped="0" flaky="0" time="4.581">
+		<testcase name="test_full_drive_forward" classname="test_gameplay" time="0.474">
+		</testcase>
+		<testcase name="test_spin_left_then_right" classname="test_gameplay" time="0.554">
+		</testcase>
+		<testcase name="test_rapid_tapping_no_crash" classname="test_gameplay" time="0.477">
+		</testcase>
+		<testcase name="test_long_runtime_stable" classname="test_gameplay" time="2.094">
+		</testcase>
+		<testcase name="test_multiple_spin_cycles" classname="test_gameplay" time="0.934">
+		</testcase>
+	</testsuite>
+	<testsuite id="1" name="test_track_navigation" package="tests/gdunit4" timestamp="2026-06-21T20:05:01" hostname="localhost" tests="1" failures="0" errors="0" skipped="0" flaky="0" time="5.914">
+		<testcase name="test_drive_through_track_and_win" classname="test_track_navigation" time="5.892">
+		</testcase>
+	</testsuite>
+	<testsuite id="2" name="test_car_physics" package="tests/gdunit4" timestamp="2026-06-21T20:05:07" hostname="localhost" tests="15" failures="0" errors="0" skipped="0" flaky="0" time="5.845">
+		<testcase name="test_idle_after_load" classname="test_car_physics" time="0.037">
+		</testcase>
+		<testcase name="test_state_transitions_idle_to_accelerate" classname="test_car_physics" time="0.041">
+		</testcase>
+		<testcase name="test_accelerate_sets_speed" classname="test_car_physics" time="0.035">
+		</testcase>
+		<testcase name="test_j_press_enters_spin" classname="test_car_physics" time="0.086">
+		</testcase>
+		<testcase name="test_l_press_enters_spin" classname="test_car_physics" time="0.092">
+		</testcase>
+		<testcase name="test_spin_slows_car" classname="test_car_physics" time="0.200">
+		</testcase>
+		<testcase name="test_release_from_spin_triggers_boost" classname="test_car_physics" time="0.182">
+		</testcase>
+		<testcase name="test_spin_changes_rotation" classname="test_car_physics" time="0.215">
+		</testcase>
+		<testcase name="test_j_and_l_together_is_no_spin" classname="test_car_physics" time="0.098">
+		</testcase>
+		<testcase name="test_boost_and_spin_state_flow" classname="test_car_physics" time="0.204">
+		</testcase>
+		<testcase name="test_state_transition_on_start" classname="test_car_physics" time="0.028">
+		</testcase>
+		<testcase name="test_state_transition_on_spin" classname="test_car_physics" time="0.083">
+		</testcase>
+		<testcase name="test_state_transition_on_boost" classname="test_car_physics" time="0.149">
+		</testcase>
+		<testcase name="test_reset_returns_to_idle" classname="test_car_physics" time="0.125">
+		</testcase>
+		<testcase name="test_long_runtime_no_crash" classname="test_car_physics" time="4.168">
+		</testcase>
+	</testsuite>
+	<testsuite id="3" name="test_params" package="tests/gdunit4" timestamp="2026-06-21T20:05:13" hostname="localhost" tests="7" failures="0" errors="0" skipped="0" flaky="0" time="1.249">
+		<testcase name="test_max_speed_affects_speed" classname="test_params" time="0.112">
+		</testcase>
+		<testcase name="test_spin_drag_affects_deceleration" classname="test_params" time="0.382">
+		</testcase>
+		<testcase name="test_spin_speed_multiplier_affects_rotation" classname="test_params" time="0.383">
+		</testcase>
+		<testcase name="test_boost_multiplier_exceeds_max_speed" classname="test_params" time="0.151">
+		</testcase>
+		<testcase name="test_collision_shape_created" classname="test_params" time="0.038">
+		</testcase>
+		<testcase name="test_wall_bounce_param_access" classname="test_params" time="0.022">
+		</testcase>
+		<testcase name="test_drift_factor_moves_car" classname="test_params" time="0.097">
+		</testcase>
+	</testsuite>
+	<testsuite id="4" name="test_keyboard_input" package="tests/gdunit4" timestamp="2026-06-21T20:05:14" hostname="localhost" tests="7" failures="0" errors="0" skipped="0" flaky="0" time="1.056">
+		<testcase name="test_j_press_triggers_spin_left" classname="test_keyboard_input" time="0.140">
+		</testcase>
+		<testcase name="test_l_press_triggers_spin_right" classname="test_keyboard_input" time="0.132">
+		</testcase>
+		<testcase name="test_j_held_maintains_spin" classname="test_keyboard_input" time="0.229">
+		</testcase>
+		<testcase name="test_release_triggers_boost" classname="test_keyboard_input" time="0.147">
+		</testcase>
+		<testcase name="test_both_keys_ignored" classname="test_keyboard_input" time="0.147">
+		</testcase>
+		<testcase name="test_no_input_when_idle" classname="test_keyboard_input" time="0.069">
+		</testcase>
+		<testcase name="test_no_steer_when_keyboard_disabled_and_no_test_flags" classname="test_keyboard_input" time="0.134">
+		</testcase>
+	</testsuite>
+</testsuites>

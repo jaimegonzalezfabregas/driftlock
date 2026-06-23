@@ -1,4 +1,4 @@
-## Spin physics test — asymmetric drag, KE transfer, no snap on exit.
+## Spin physics test — uniform drag during spin, KE transfer, sideways grip on exit.
 ##
 ## Run:  godot --headless --path . tests/test_spin_physics.tscn
 extends Node2D
@@ -18,7 +18,7 @@ var _entries: Array[String] = []
 func _ready() -> void:
 	_ensure_game_state()
 	_sep()
-	_log("SPIN PHYSICS TEST — KE transfer, asymmetric drag, no snap on exit")
+	_log("SPIN PHYSICS TEST — uniform drag, KE transfer, sideways grip on exit")
 	_sep()
 	_log("")
 
@@ -34,8 +34,8 @@ func _ready() -> void:
 
 func _run_all() -> void:
 	await _test_ke_transfer_reduces_speed()
-	await _test_sideways_bleeds_faster_than_forward()
-	await _test_no_snap_on_spin_exit()
+	await _test_uniform_velocity_drag_during_spin()
+	await _test_sideways_grip_on_exit()
 	await _test_spin_angular_velocity_dragged()
 	await _test_spin_direction_left_vs_right()
 
@@ -145,56 +145,61 @@ func _test_ke_transfer_reduces_speed() -> void:
 	_log("")
 
 
-func _test_sideways_bleeds_faster_than_forward() -> void:
-	_log("── test_sideways_bleeds_faster_than_forward ──")
-	_log("  During a sustained spin, the sideways component should decrease")
-	_log("  faster than the forward component (asymmetric drag).")
+func _test_uniform_velocity_drag_during_spin() -> void:
+	_log("── test_uniform_velocity_drag_during_spin ──")
+	_log("  During a sustained spin, velocity length should decay by")
+	_log("  a predictable factor each frame (uniform drag, direction-agnostic).")
 
 	_car = await _spawn_car()
 	_car.set("_accept_keyboard_input", false)
 
-	# Position in open space, set an initial velocity
+	# Set a custom uniform drag for predictable decay.
+	var p = _P()
+	if p != null:
+		p.set("spin_velocity_drag", 0.90)
+
+	# Position in open space, set an initial velocity in any direction.
 	_car.global_position = Vector2(500, 500)
 	_car.global_rotation = 0.0
-	var vel := Vector2(300, 200)  # mix of forward and sideways
+	var vel := Vector2(300, 0)
 	_car.set("velocity", vel)
 	_car.set("car_state", 1)  # SPINNING
 	_car.set("spin_direction", 1)
 	_car.set("spin_angular_velocity", 5.0)
 	await _frames(2)
 
-	# Capture forward/sideways components after a few frames.
-	var fwd_init = _fwd_speed()
-	var side_init = _side_speed()
-	_log("  Initial: fwd=%.1f  side=%.1f" % [fwd_init, side_init])
+	var speed_init = _speed()
+	_log("  Initial speed: %.1f px/s" % speed_init)
 
-	# Keep spinning for 20 frames.
+	# Keep spinning for 30 frames — velocity drag should reduce speed.
 	_press(false, true)  # hold right spin
-	await _frames(20)
-	_press(false, false)  # release
+	await _frames(30)
 
-	var fwd_after = _fwd_speed()
-	var side_after = _side_speed()
-	_log("  After 20 frames of spin: fwd=%.1f  side=%.1f" % [fwd_after, side_after])
+	var speed_after = _speed()
+	_log("  Speed after 30 frames of spin: %.1f px/s" % speed_after)
 
-	# Forward should have decreased less proportionally than sideways.
-	var fwd_ratio = abs(fwd_after / maxf(abs(fwd_init), 0.01))
-	var side_ratio = abs(side_after / maxf(abs(side_init), 0.01))
-	_log("  Retention ratios: fwd=%.2f  side=%.2f" % [fwd_ratio, side_ratio])
+	# With drag=0.90 per 60fps tick, after 30 frames:
+	# expected = initial * 0.90^30 ≈ initial * 0.042
+	# Speed should be significantly lower than initial.
+	_assert(speed_after < speed_init * 0.95,
+		"Velocity decays during spin (%.1f -> %.1f, expected < %.1f)" \
+		% [speed_init, speed_after, speed_init * 0.95])
 
-	_assert(side_ratio < fwd_ratio,
-		"Sideways bleeds faster than forward (side ratio %.2f < forward ratio %.2f)" \
-		% [side_ratio, fwd_ratio])
+	# Drag is uniform: regardless of how the car rotated during spin,
+	# the velocity magnitude decays the same way.
+	_assert(speed_after > 0,
+		"Velocity magnitude stays positive (%.1f > 0)" % speed_after)
 
+	_press(false, false)
 	_car.queue_free()
 	_car = null
 	_log("")
 
 
-func _test_no_snap_on_spin_exit() -> void:
-	_log("── test_no_snap_on_spin_exit ──")
-	_log("  After releasing the spin button, the car should transition to")
-	_log("  ACCELERATE without snapping velocity to the forward direction.")
+func _test_sideways_grip_on_exit() -> void:
+	_log("── test_sideways_grip_on_exit ──")
+	_log("  After releasing the spin button, the car should kill lateral")
+	_log("  velocity (sideways grip) while keeping forward momentum.")
 
 	_car = await _spawn_car()
 	_car.set("_accept_keyboard_input", false)
@@ -210,11 +215,11 @@ func _test_no_snap_on_spin_exit() -> void:
 	var vel_during = _car.get("velocity")
 	var rot_during = _car.global_rotation
 
-	# Release spin
+	# Release spin — sideways grip engages
 	_press(false, false)
 	await _frames(2)
 
-	# After exit, velocity should still have a sideways component (no snap).
+	# After exit, sideways component should be zero (grip killed it).
 	var vel_after = _car.get("velocity")
 	var fwd := Vector2.RIGHT.rotated(_car.global_rotation)
 	var side := fwd.rotated(PI * 0.5)
@@ -222,11 +227,16 @@ func _test_no_snap_on_spin_exit() -> void:
 
 	_log("  Velocity during spin: (%.1f, %.1f)" % [vel_during.x, vel_during.y])
 	_log("  Velocity after exit:  (%.1f, %.1f)" % [vel_after.x, vel_after.y])
-	_log("  Sideways component after exit: %.1f  (expected > 1.0 — no snap)" % side_after)
+	_log("  Sideways component after exit: %.1f  (expected near 0 — grip engaged)" % side_after)
 
-	# The car should not have been snapped to pure forward.
-	_assert(abs(side_after) > 1.0,
-		"Sideways velocity remains after spin exit (%.1f > 1.0) — no snap" % side_after)
+	# Sideways grip should have killed lateral velocity.
+	_assert(abs(side_after) < 1.0,
+		"Sideways velocity killed on exit (|%.1f| < 1.0) — grip engaged" % side_after)
+
+	# Forward momentum should still be > 0.
+	var fwd_speed = fwd.dot(vel_after)
+	_assert(fwd_speed > 10.0,
+		"Forward momentum preserved after exit (%.1f > 10.0)" % fwd_speed)
 
 	# State should be ACCELERATE
 	var state = _car.get("car_state")

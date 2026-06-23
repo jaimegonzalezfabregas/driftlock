@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites id="2026-06-21" name="report_66" tests="7" failures="1" skipped="0" flaky="0" time="0.000">
+	<testsuite id="0" name="test_keyboard_input" package="tests/gdunit4" timestamp="2026-06-21T18:53:55" hostname="localhost" tests="7" failures="1" errors="0" skipped="0" flaky="0" time="1.111">
+		<testcase name="test_j_press_triggers_spin_left" classname="test_keyboard_input" time="0.186">
+		</testcase>
+		<testcase name="test_l_press_triggers_spin_right" classname="test_keyboard_input" time="0.147">
+		</testcase>
+		<testcase name="test_j_held_maintains_spin" classname="test_keyboard_input" time="0.218">
+		</testcase>
+		<testcase name="test_release_triggers_boost" classname="test_keyboard_input" time="0.154">
+			<failure message="FAILED: res://tests/gdunit4/test_keyboard_input.gd:108" type="FAILURE">
+<![CDATA[
+Expecting: 'true' but is 'false'
+]]>
+			</failure>
+		</testcase>
+		<testcase name="test_both_keys_ignored" classname="test_keyboard_input" time="0.147">
+		</testcase>
+		<testcase name="test_no_input_when_idle" classname="test_keyboard_input" time="0.069">
+		</testcase>
+		<testcase name="test_no_steer_when_keyboard_disabled_and_no_test_flags" classname="test_keyboard_input" time="0.129">
+		</testcase>
+	</testsuite>
+</testsuites>
