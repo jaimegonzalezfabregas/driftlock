@@ -30,6 +30,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Diagnostics
+        run: |
+          godot --version
+          echo "---"
+          pwd
+          ls -la
+          echo "--- export_presets ---"
+          cat export_presets.cfg
+
       - name: Pre-heat Import Cache
         run: |
           godot --headless --editor --quit --path . || true
@@ -37,7 +46,7 @@ jobs:
       - name: Export Web Release
         run: |
           mkdir -p build/web
-          godot --headless --export-release "Web" build/web/index.html
+          xvfb-run godot --headless --verbose --export-release "Web" build/web/index.html 2>&1 | tail -50
 
       - name: Flatten Build for Pages
         run: |
@@ -45,9 +54,11 @@ jobs:
             mv build/web/Web/* build/web/
             rm -rf build/web/Web
           fi
-          ls -lh build/web/
+          echo "=== build/web contents ==="
+          ls -lh build/web/ 2>/dev/null || echo "(empty)"
 
       - name: Upload Artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: web-build
