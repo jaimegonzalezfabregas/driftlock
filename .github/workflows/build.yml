@@ -23,6 +23,8 @@ jobs:
   export-web:
     name: Export to HTML5
     runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.5.2
 
     steps:
       - name: Checkout
@@ -30,20 +32,12 @@ jobs:
 
       - name: Pre-heat Import Cache
         run: |
-          mkdir -p ~/.local/share/godot/export_templates
-          wget -q "https://github.com/godotengine/godot/releases/download/${{ env.GODOT_VERSION }}-stable/Godot_v${{ env.GODOT_VERSION }}-stable_linux.x86_64.zip"
-          unzip -q "Godot_v${{ env.GODOT_VERSION }}-stable_linux.x86_64.zip"
-          ./Godot_v${{ env.GODOT_VERSION }}-stable_linux.x86_64 --headless --editor --quit --path . || true
+          godot --headless --editor --quit --path . || true
 
-      - name: Export Game
-        id: export
-        uses: firebelley/godot-export@v7.0.0
-        with:
-          godot_executable_download_url: https://github.com/godotengine/godot/releases/download/${{ env.GODOT_VERSION }}-stable/Godot_v${{ env.GODOT_VERSION }}-stable_linux.x86_64.zip
-          godot_export_templates_download_url: https://github.com/godotengine/godot/releases/download/${{ env.GODOT_VERSION }}-stable/Godot_v${{ env.GODOT_VERSION }}-stable_export_templates.tpz
-          relative_project_path: .
-          use_preset_export_path: true
-          archive_output: false
+      - name: Export Web Release
+        run: |
+          mkdir -p build/web
+          godot --headless --export-release "Web" build/web/index.html
 
       - name: Flatten Build for Pages
         run: |
