@@ -16,8 +16,7 @@ extends Resource
 ## transfer (linear KE → rotational KE), then dragged each frame.
 @export var spin_drag: float = 0.97
 
-## Minimum rotation speed (rad/s) while spinning, even at zero velocity.
-@export var min_spin_rate: float = 1
+
 
 ## Minimum spin duration (seconds).  The car spins for at least this long
 ## after entering a spin, even if the turn key is released early.
@@ -29,10 +28,16 @@ extends Resource
 ## when the turn key is released (spin exit).
 @export var spin_velocity_drag: float = 0.97
 
+## Fraction of forward speed converted to angular velocity per second
+## during a spin.  Higher values = more rotation from forward speed,
+## which also slows the car down faster during spins.
+@export var rotation_power: float = 0.3
+
 # ── Speed floors ──────────────────────────────────────────────────────────
-## Minimum linear speed floor (px/s).  Applied every frame regardless of
-## state — clamps total velocity magnitude so the car never stalls.
-@export var min_linear_speed: float = 200.0
+
+@export var min_linear_speed: float = 200
+
+@export var min_spin_rate: float = 0.5
 
 # ── Car shape ─────────────────────────────────────────────────────────────
 ## Collision shape width (px).

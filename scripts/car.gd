@@ -111,7 +111,7 @@ func _handle_input() -> void:
 		if wants_spin:
 			spin_direction = -1 if j else 1
 			spin_timer = 0.0
-			_transfer_linear_to_rotational(P())
+			spin_angular_velocity = _g(P(), "min_spin_rate", 0.5)
 			car_state = State.SPINNING
 			emit_signal("state_changed", State.SPINNING)
 	elif car_state == State.SPINNING:
@@ -160,12 +160,15 @@ func _accelerate(delta: float, p: Resource) -> void:
 func _spin(delta: float, p: Resource) -> void:
 	spin_timer += delta
 
+	# Continuous linear‑to‑rotational energy transfer.
+	_transfer_linear_to_rotational(delta, p)
+
 	# Drag angular velocity (tire friction during spin).
 	var drag = _g(p, "spin_drag", 0.97)
 	spin_angular_velocity *= pow(drag, delta * 60.0)
 
 	# Clamp to minimum spin rate (car keeps rotating even when nearly stopped).
-	var min_rate = _g(p, "min_spin_rate", 1.5)
+	var min_rate = _g(p, "min_spin_rate", 0.5)
 	if abs(spin_angular_velocity) < min_rate:
 		spin_angular_velocity = sign(spin_angular_velocity) * min_rate
 
@@ -180,36 +183,30 @@ func _spin(delta: float, p: Resource) -> void:
 	velocity *= pow(vel_drag, delta * 60.0)
 
 
-## Convert a fraction of linear kinetic energy to rotational kinetic
-## energy when the car starts a spin.  This naturally reduces forward
-## speed while generating a spin — the faster you're going, the harder
-## you whip around.
-func _transfer_linear_to_rotational(p: Resource) -> void:
-	var mass = _g(p, "car_mass", 1000.0)
-	var car_w = _g(p, "car_width", 36.0)
-	var car_h = _g(p, "car_height", 20.0)
-
-	# Moment of inertia for a rectangular body spinning about its centre.
-	var I = (1.0 / 12.0) * mass * (car_w * car_w + car_h * car_h)
-
-	var v = velocity.length()
-	if v < 1.0:
-		# Too slow for meaningful transfer — just set minimum spin rate.
-		spin_angular_velocity = 0.0
+## Each frame during a spin, convert a fraction of forward speed into
+## angular velocity.  `rotation_power` controls the transfer rate:
+## higher values = more rotation from speed, which also decelerates
+## the car faster.
+func _transfer_linear_to_rotational(delta: float, p: Resource) -> void:
+	var power = _g(p, "rotation_power", 0.3)
+	if power <= 0.0:
 		return
 
-	var E_lin = 0.5 * mass * v * v
-	const TRANSFER := 0.03   # 3 % of linear KE → rotational KE
+	var forward := Vector2.RIGHT.rotated(global_rotation)
+	var fwd_speed = forward.dot(velocity)
+	if fwd_speed <= 0.0:
+		return
 
-	var E_rot = E_lin * TRANSFER
+	# Transfer a fraction of forward speed to angular velocity.
+	var transfer = fwd_speed * power * delta
+	velocity -= forward * transfer
 
-	# New linear speed after energy removed.
-	var E_lin_new = E_lin - E_rot
-	var v_new = sqrt(maxf(0.0, 2.0 * E_lin_new / mass))
-	velocity = velocity.normalized() * v_new
-
-	# Angular velocity from transferred rotational energy.
-	spin_angular_velocity = sqrt(2.0 * E_rot / I)
+	# Convert linear speed loss to angular velocity gain.
+	# Ratio: angular_vel_gain = transfer / r_eff  where r_eff is an
+	# effective radius derived from car width (wider car → more leverage).
+	var car_w = _g(p, "car_width", 36.0)
+	var r_eff = car_w * 0.5
+	spin_angular_velocity += transfer / r_eff
 
 
 func start_race() -> void:

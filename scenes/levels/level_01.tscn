@@ -1,18 +1,18 @@
-[gd_scene format=3 uid="uid://cud3432fh0vxf"]
+[gd_scene load_steps=4 format=3 uid="uid://cud3432fh0vxf"]
 
 [ext_resource type="Script" uid="uid://bjt8wj0hef4jc" path="res://scenes/levels/level_01.gd" id="1"]
-[ext_resource type="Script" path="res://scripts/track_builder.gd" id="2"]
+[ext_resource type="Script" uid="uid://bpthnnhd5py3j" path="res://scripts/track_builder.gd" id="2"]
 
 [sub_resource type="Curve2D" id="Curve2D_m802k"]
 _data = {
-"points": PackedVector2Array(-309.922, -486.1008, 309.922, 486.1008, -71, 539, 51.465683, 484.38782, -51.465683, -484.38782, 671, 759, 144.73325, -314.102, -144.73325, 314.102, -47, 942)
+"points": PackedVector2Array(-309.922, -486.1008, 309.922, 486.1008, -71, 539, 51.465683, 484.38782, -51.465683, -484.38782, 671, 759, -146.79489, -264.79944, 146.79489, 264.79944, -54, 963, -113.61023, -180.0615, 113.61023, 180.0615, -11, 1628, -147.84335, 119.31218, 147.84335, -119.31218, 889, 1709, 0, 0, 0, 0, 1076, 1021)
 }
-point_count = 3
+point_count = 6
 
-[node name="Level01" type="Node2D" unique_id=665745922]
+[node name="Level01" type="Node2D"]
 script = ExtResource("1")
 
-[node name="TrackPath" type="Path2D" parent="." unique_id=864603808]
+[node name="TrackPath" type="Path2D" parent="."]
 position = Vector2(488, 219)
 curve = SubResource("Curve2D_m802k")
 script = ExtResource("2")

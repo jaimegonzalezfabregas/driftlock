@@ -104,7 +104,7 @@ func test_car_mass_affects_speed() -> void:
 
 # ── NOTE: `spin_speed_multiplier` removed — spin is now driven by
 # kinetic‑energy transfer (linear KE → rotational KE) with the transfer
-# fraction hardcoded at 3 % in _transfer_linear_to_rotational().
+# controlled by rotation_power in _transfer_linear_to_rotational().
 # A future test should verify that higher engine_power / lighter mass
 # produces faster spins (more KE available for conversion).
 

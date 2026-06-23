@@ -106,7 +106,7 @@ func _frames(n: int) -> void:
 
 func _test_ke_transfer_reduces_speed() -> void:
 	_log("── test_ke_transfer_reduces_speed ──")
-	_log("  Verify that entering a spin reduces forward speed (KE transfer).")
+	_log("  Verify that sustained spin reduces forward speed (per-frame KE transfer).")
 
 	_car = await _spawn_car()
 	_car.set("_accept_keyboard_input", false)
@@ -116,15 +116,18 @@ func _test_ke_transfer_reduces_speed() -> void:
 	var speed_before = _speed()
 	_log("  Speed before spin: %.1f px/s" % speed_before)
 
+	# Enter spin and hold for several frames — continuous KE transfer
+	# should slow the car down over time.
 	_press(true, false)   # J → left spin
-	await _frames(1)       # one physics frame to process input
+	await _frames(15)
 	var speed_after = _speed()
-	_log("  Speed after spin entry: %.1f px/s" % speed_after)
+	_log("  Speed after 15 frames of spin: %.1f px/s" % speed_after)
 
-	_assert(speed_after < speed_before * 0.99,
-		"Speed decreases on spin entry (%.1f -> %.1f, expected < %.1f)" \
-		% [speed_before, speed_after, speed_before * 0.99])
+	_assert(speed_after < speed_before * 0.95,
+		"Speed decreases during sustained spin (%.1f -> %.1f, expected < %.1f)" \
+		% [speed_before, speed_after, speed_before * 0.95])
 
+	_press(false, false)
 	_car.queue_free()
 	_car = null
 	_log("")
@@ -138,10 +141,12 @@ func _test_uniform_velocity_drag_during_spin() -> void:
 	_car = await _spawn_car()
 	_car.set("_accept_keyboard_input", false)
 
-	# Set a custom uniform drag for predictable decay.
+	# Set a custom uniform drag for predictable decay.  Disable the
+	# per-frame KE transfer so speed decay is purely from drag.
 	var p = _P()
 	if p != null:
 		p.set("spin_velocity_drag", 0.90)
+		p.set("rotation_power", 0.0)
 
 	# Position in open space, set an initial velocity in any direction.
 	_car.global_position = Vector2(500, 500)
@@ -246,6 +251,12 @@ func _test_spin_angular_velocity_dragged() -> void:
 
 	_car = await _spawn_car()
 	_car.set("_accept_keyboard_input", false)
+
+	# Disable per-frame KE transfer so angular velocity change is purely
+	# from drag (no speed-to-rotation injection).
+	var p = _P()
+	if p != null:
+		p.set("rotation_power", 0.0)
 
 	# Manually set a high angular velocity
 	_car.set("spin_direction", 1)

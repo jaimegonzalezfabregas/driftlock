@@ -96,7 +96,7 @@ func _process(delta: float) -> void:
 		var car := _car as Node2D
 		var forward := Vector2.RIGHT.rotated(car.global_rotation)
 
-		const LOOK_AHEAD := 30.0
+		const LOOK_AHEAD := -30.0
 		_camera.global_position = car.global_position + forward * LOOK_AHEAD
 
 
