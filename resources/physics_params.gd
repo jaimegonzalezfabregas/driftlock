@@ -11,7 +11,7 @@ extends Resource
 @export var car_mass: float = 1000.0
 
 ## Starting speed when the race begins (px/s).
-@export var initial_speed: float = 100.0
+@export var initial_speed: float = 500.0
 
 # ── Spin ──────────────────────────────────────────────────────────────────
 ## Angular‑velocity multiplier per 60‑FPS physics tick while spinning
@@ -20,22 +20,22 @@ extends Resource
 @export var spin_drag: float = 0.97
 
 ## Minimum rotation speed (rad/s) while spinning, even at zero velocity.
-@export var min_spin_rate: float = 1.5
+@export var min_spin_rate: float = 3
 
 ## Minimum spin duration (seconds).  The car spins for at least this long
 ## after entering a spin, even if the turn key is released early.
-@export var spin_min_time: float = 1.0
+@export var spin_min_time: float = 0.2
 
 ## Uniform velocity multiplier per 60‑FPS physics tick during spin
 ## (0.0 – 1.0).  Drag is equal in all directions so the car slides
 ## in a straight line while spinning.  Sideways grip only engages
 ## when the turn key is released (spin exit).
-@export var spin_velocity_drag: float = 0.85
+@export var spin_velocity_drag: float = 0.97
 
 # ── Speed floors ──────────────────────────────────────────────────────────
-## Minimum forward speed (px/s) while in ACCELERATE state.
-## Applied each acceleration tick to prevent stall after a spin.
-@export var min_accelerate_speed: float = 50.0
+## Minimum linear speed floor (px/s).  Applied every frame regardless of
+## state — clamps total velocity magnitude so the car never stalls.
+@export var min_linear_speed: float = 50.0
 
 # ── Car shape ─────────────────────────────────────────────────────────────
 ## Collision shape width (px).
@@ -52,7 +52,7 @@ extends Resource
 
 # ── Wall collision ────────────────────────────────────────────────────────
 ## If true, car bounces off walls instead of dying (test-friendly).
-@export var wall_bounce: bool = false
+@export var wall_bounce: bool = true
 
 ## Bounce restitution when wall_bounce is true (0.0 = stop, 1.0 = full bounce).
 @export var wall_bounce_restitution: float = 0.3
