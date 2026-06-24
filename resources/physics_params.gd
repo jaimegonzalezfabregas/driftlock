@@ -14,22 +14,24 @@ extends Resource
 ## frame, creating a natural top speed: v_top = (engine_power / air_drag)^⅓.
 ## Higher values = lower top speed and more noticeable deceleration when
 ## coasting.
-@export var air_drag: float = 0.4
+@export var air_drag: float = 2.0
 
 # ── Spin ──────────────────────────────────────────────────────────────────
 ## Angular mass (moment of inertia, arbitrary units).  Higher values make
 ## the car harder to spin (more rotational KE needed for the same angular
 ## velocity).  Roughly analogous to `car_mass` but for rotation.
-@export var angular_mass: float = 1500.0
+@export var angular_mass: float = 5000.0
 
 ## Angular‑velocity multiplier per 60‑FPS physics tick while spinning
 ## (0.0 – 1.0).  The spin speed is set once on entry via kinetic‑energy
 ## transfer (linear KE → rotational KE), then dragged each frame.
-@export var spin_drag: float = 0.97
+## 0.93: moderate decay that limits peak angular velocity.
+@export var spin_drag: float = 0.93
 
-## Minimum spin duration (seconds).  The car spins for at least this long
-## after entering a spin, even if the turn key is released early.
-@export var spin_min_time: float = 0.5
+## Minimum accumulated rotation (radians) before the spin can be released.
+## The car must rotate at least this much after entering a spin, even if
+## the turn key is released early.  ~1 full rotation ≈ 6.28 rad.
+@export var spin_min_rotations: float = TAU
 
 ## Minimum accelerate duration (seconds).  After exiting a spin the car
 ## must accelerate for at least this long before it can spin again.
@@ -40,16 +42,19 @@ extends Resource
 ## (0.0 – 1.0).  Drag is equal in all directions so the car slides
 ## in a straight line while spinning.  Sideways grip only engages
 ## when the turn key is released (spin exit).
-@export var spin_velocity_drag: float = 0.97
+## 0.995: very gentle decay — car keeps ~86 % speed after a 0.5 s spin.
+@export var spin_velocity_drag: float = 0.995
 
 ## Fraction of current linear kinetic energy converted to rotational
-## kinetic energy each physics frame during a spin.  0.03 = 3 % per frame.
+## kinetic energy each physics frame during a spin.  0.002 = 0.2 % per frame.
 ## Linear energy is depleted by this amount, so the car slows down.
-@export var rotation_efficiency: float = 0.08
+@export var rotation_efficiency: float = 0.002
 
 ## Speed boost applied on spin exit: boost = spin_angular_velocity × multiplier.
 ## Higher values = bigger speed burst after spinning, rewarding longer spins.
-@export var spin_boost_multiplier: float = 3.0
+## Tuned to give ~150–300 px/s boost at typical spin speeds with the new
+## rotation_efficiency and angular_mass values.
+@export var spin_boost_multiplier: float = 8.0
 
 ## Maximum boost speed added on spin exit (px/s).  Prevents absurd speeds
 ## from very long/high-energy spins.

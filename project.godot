@@ -19,6 +19,7 @@ config/icon="res://icon.svg"
 [autoload]
 
 GameState="*res://autoload/game_state.gd"
+SoundManager="*res://autoload/sound_manager.gd"
 
 [rendering]
 

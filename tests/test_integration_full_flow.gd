@@ -206,12 +206,17 @@ func _check_nodes() -> void:
 		var rot = _car.get("global_rotation")
 		var speed = _car.get("current_speed")
 		var state = _car.get("car_state")
+		var locked = _car.get("_input_locked")
 
-		_assert(typeof(speed) == TYPE_FLOAT and speed > 0.0,
-			"Car initial speed = %.1f px/s  (start_race ran, expected > 0)" % speed)
+		# During countdown, car state is ACCELERATE but speed is 0.
+		_assert(typeof(speed) == TYPE_FLOAT and speed == 0.0,
+			"Car initial speed = %.1f px/s  (0 during countdown, start_race after)" % speed)
 
 		_assert(typeof(state) == TYPE_INT and state == 0,
 			"Car initial state = %d  (0 = ACCELERATE)" % state)
+
+		_assert(typeof(locked) == TYPE_BOOL and locked == true,
+			"Car _input_locked = %s  (locked during countdown)" % str(locked))
 
 		_assert(typeof(pos) == TYPE_VECTOR2 and (pos.x != 0.0 or pos.y != 0.0),
 			"Car spawn position = (%.0f, %.0f) — not at origin" % [pos.x, pos.y])
@@ -331,6 +336,7 @@ func _configure_params() -> void:
 	var p := gs.get("physics_params") as Resource
 	if p == null:
 		return
+	p.set("min_accelerate_time", 0.0)  # no minimum time for tests
 	p.set("wall_bounce", true)
 	p.set("wall_bounce_restitution", 0.4)
 

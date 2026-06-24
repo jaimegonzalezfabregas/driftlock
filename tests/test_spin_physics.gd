@@ -52,6 +52,7 @@ func _ensure_game_state() -> void:
 		var p := preload("res://resources/physics_params.gd").new()
 		p.set("wall_bounce", false)
 		p.set("min_accelerate_time", 0.0)  # no minimum time for tests
+		p.set("spin_min_rotations", 0.0)   # test controls release directly
 		gs.set("physics_params", p)
 		gs.set("accept_keyboard_input", false)
 		Engine.register_singleton("GameState", gs)

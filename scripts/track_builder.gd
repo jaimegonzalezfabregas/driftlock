@@ -153,7 +153,8 @@ func _draw_fill_segments(bl: float, half: float, step: float) -> void:
 
 	for i in range(n - 1):
 		var poly := PackedVector2Array([left[i], left[i + 1], right[i + 1], right[i]])
-		draw_colored_polygon(poly, corridor_color)
+		if _valid_draw_quad(poly):
+			draw_colored_polygon(poly, corridor_color)
 
 
 ## Black / dark strip at the start of the track.
@@ -175,7 +176,8 @@ func _draw_start_section(bl: float, half: float, step: float) -> void:
 
 	for i in range(n - 1):
 		var poly := PackedVector2Array([left[i], left[i + 1], right[i + 1], right[i]])
-		draw_colored_polygon(poly, start_section_color)
+		if _valid_draw_quad(poly):
+			draw_colored_polygon(poly, start_section_color)
 
 
 ## Checkerboard pattern at the finish line.
@@ -207,7 +209,8 @@ func _draw_finish_checkerboard(bl: float, half: float) -> void:
 			var p10 := centers[ai + 1] + normals[ai + 1] * w0
 			var p11 := centers[ai + 1] + normals[ai + 1] * w1
 			var poly := PackedVector2Array([p00, p10, p11, p01])
-			draw_colored_polygon(poly, color)
+			if _valid_draw_quad(poly):
+				draw_colored_polygon(poly, color)
 
 
 ## Draw the F1‑style starting grid slot: a U‑shaped outline open at
@@ -256,6 +259,7 @@ func _draw_grid_slot(half: float) -> void:
 # ═════════════════════════════════════════════════════════════════════
 
 ## Draw colour overlays for each spin zone along the track.
+## Also draws boundary markers (chevron arrows) at zone entry/exit.
 func _draw_spin_zones(bl: float, half: float, step: float) -> void:
 	for z in spin_zones:
 		var start_ofs := z.get("start_offset", 0.0) as float
@@ -280,12 +284,46 @@ func _draw_spin_zones(bl: float, half: float, step: float) -> void:
 
 			if not first:
 				var poly := PackedVector2Array([prev_left, l, r, prev_right])
-				draw_colored_polygon(poly, color)
+				if _valid_draw_quad(poly):
+					draw_colored_polygon(poly, color)
 
 			prev_left = l
 			prev_right = r
 			first = false
 			t += step
+
+		# ── Boundary markers: chevron arrows at entry and exit ──
+		_draw_zone_boundary_marker(start_ofs, half, color)
+		_draw_zone_boundary_marker(end_ofs, half, color)
+
+
+## Draw a chevron arrow marker at a given baked offset to indicate
+## a spin zone boundary.  The arrow points in the track direction.
+func _draw_zone_boundary_marker(baked_offset: float, half: float, color: Color) -> void:
+	if curve == null:
+		return
+	var bl := curve.get_baked_length()
+	if baked_offset < 0.0 or baked_offset > bl:
+		return
+
+	var xf := curve.sample_baked_with_rotation(baked_offset)
+	var fwd := Vector2.RIGHT.rotated(xf.get_rotation())
+	var nrm := fwd.rotated(PI * 0.5)
+
+	var alpha := minf(color.a + 0.3, 1.0)
+	var marker_color := Color(color.r, color.g, color.b, alpha)
+	var arrow_size := 14.0
+	var gap := 6.0  # inset from track edge
+
+	for side in [-1.0, 1.0]:
+		var base: Vector2 = xf.origin + nrm * (half - gap) * side
+		var tip: Vector2 = base + fwd * arrow_size * sign(-side)
+		var wing: Vector2 = base + (fwd - nrm * 0.5 * side) * arrow_size * 0.6 * sign(-side)
+		var wing2: Vector2 = base + (fwd + nrm * 0.5 * side) * arrow_size * 0.6 * sign(-side)
+
+		draw_line(base, tip, marker_color, 2.5)
+		draw_line(tip, wing, marker_color, 2.0)
+		draw_line(tip, wing2, marker_color, 2.0)
 
 
 ## Returns the bonus multiplier for the given world position.
@@ -516,4 +554,32 @@ static func _valid_edge_segment(a: Vector2, b: Vector2, center_ref: Dictionary, 
 	# the segment passes through the other branch's corridor — skip it.
 	if min_d_sq < threshold_sq and abs(min_t - seg_t) > step * REMOTE_T_FACTOR:
 		return false
+	return true
+
+
+## Returns true if a 4‑vertex polygon is safe to draw (non‑degenerate,
+## minimum area, convex).  Prevents "triangulation failed" errors from
+## `draw_colored_polygon` on tight curve segments.
+static func _valid_draw_quad(poly: PackedVector2Array) -> bool:
+	if poly.size() < 4:
+		return false
+	# Minimum area threshold (px²) — skip zero‑area slivers.
+	var area := 0.0
+	for i in range(4):
+		var j := (i + 1) % 4
+		area += poly[i].cross(poly[j])
+	area = abs(area) * 0.5
+	if area < 1.0:
+		return false
+	# Check convexity: all cross products must have the same sign.
+	var sign_ := 0.0
+	for i in range(4):
+		var a := poly[i]
+		var b := poly[(i + 1) % 4]
+		var c := poly[(i + 2) % 4]
+		var cross := (b - a).cross(c - b)
+		if sign_ == 0.0:
+			sign_ = sign(cross)
+		elif sign_ * cross < 0.0:
+			return false  # different sign → concave or self‑intersecting
 	return true

@@ -6,6 +6,7 @@ var car_state: State = State.ACCELERATE
 var spin_direction: int = 0
 var spin_angular_velocity: float = 0.0   # rad/s
 var spin_timer: float = 0.0              # seconds spent in current spin
+var _accumulated_spin_rotation: float = 0.0  # total rad rotated this spin
 var accelerate_timer: float = 0.0        # seconds spent in current accelerate
 var current_speed: float = 0.0
 var spin_energy: float = 0.0            # normalised 0–1 for UI
@@ -27,9 +28,28 @@ const COMBO_MAX: int = 5                # cap combo at 5 → 3.0× boost
 var _test_input_left: bool = false
 var _test_input_right: bool = false
 var _accept_keyboard_input: bool = true
+var _input_locked: bool = false  # blocks keyboard input (used by countdown)
 var _PP = preload("res://resources/physics_params.gd")
 var _local_params: Resource = null
 var _track_builder: Node = null  # set by level_base after spawn
+
+# Particle FX nodes.
+var _spin_dust: GPUParticles2D = null
+var _boost_trail: GPUParticles2D = null
+
+# Audio.
+var _engine_player: AudioStreamPlayer2D = null
+
+# ── Powerup / shield state ──────────────────────────────────────────────
+## Shield absorbs the next wall hit — enters spin instead of dying.
+var _shield_active: bool = false
+var _shield_spin_force: float = 0.0
+
+## Mega spin temporary buff.
+var _mega_spin_active: bool = false
+var _mega_spin_timer: float = 0.0
+var _mega_spin_efficiency_mult: float = 1.0
+var _mega_spin_force: float = 0.0
 
 signal state_changed(new_state: State)
 signal wall_hit()
@@ -47,6 +67,9 @@ func _g(p: Resource, key: String, default = null):
 func _ready() -> void:
 	_ensure_params()
 	_sync_keyboard_flag()
+	_setup_particles()
+	_setup_audio()
+	add_to_group("car")
 
 
 func _ensure_params() -> void:
@@ -63,6 +86,79 @@ func _sync_keyboard_flag() -> void:
 	var gs = _singleton()
 	if gs != null:
 		_accept_keyboard_input = gs.get("accept_keyboard_input")
+
+
+func _setup_particles() -> void:
+	## Create spin‑dust and boost‑trail GPU particle emitters as children.
+	# ── Spin dust: emitted from rear while spinning ────────────────
+	var dust := GPUParticles2D.new()
+	dust.name = "SpinDust"
+	dust.amount = 24
+	dust.lifetime = 0.4
+	dust.preprocess = 0.0
+	dust.one_shot = false
+	dust.emitting = false
+	dust.local_coords = true
+
+	var dust_mat := ParticleProcessMaterial.new()
+	dust_mat.direction = Vector3(0.0, 1.0, 0.0)   # backward in car-local
+	dust_mat.spread = 60.0
+	dust_mat.initial_velocity = Vector2(20.0, 60.0)
+	dust_mat.angular_velocity = Vector2(0.0, 120.0)
+	dust_mat.scale_min = 2.0
+	dust_mat.scale_max = 5.0
+	dust_mat.color = Color(0.55, 0.45, 0.35, 0.5)  # brownish dust
+	dust_mat.gravity = Vector3.ZERO
+	dust.process_material = dust_mat
+
+	dust.position = Vector2(-18.0, 0.0)  # rear of car
+	add_child(dust)
+	_spin_dust = dust
+
+	# ── Boost trail: burst of flame on boost application ───────────
+	var trail := GPUParticles2D.new()
+	trail.name = "BoostTrail"
+	trail.amount = 16
+	trail.lifetime = 0.25
+	trail.preprocess = 0.0
+	trail.one_shot = true   # burst on each boost
+	trail.emitting = false
+	trail.local_coords = true
+
+	var trail_mat := ParticleProcessMaterial.new()
+	trail_mat.direction = Vector3(0.0, 1.0, 0.0)
+	trail_mat.spread = 30.0
+	trail_mat.initial_velocity = Vector2(80.0, 160.0)
+	trail_mat.scale_min = 3.0
+	trail_mat.scale_max = 8.0
+	trail_mat.color = Color(1.0, 0.5, 0.0, 0.7)  # orange flame
+	trail_mat.gravity = Vector3.ZERO
+	trail.process_material = trail_mat
+
+	trail.position = Vector2(-18.0, 0.0)  # rear of car
+	add_child(trail)
+	_boost_trail = trail
+
+
+func _setup_audio() -> void:
+	## Set up the continuous engine‑hum AudioStreamPlayer2D.
+	if not Engine.has_singleton("SoundManager"):
+		return
+	var sm = Engine.get_singleton("SoundManager")
+	if not sm or not sm.has_method("get_sfx_stream"):
+		return
+	var stream: AudioStreamWAV = sm.get_sfx_stream("engine_loop") as AudioStreamWAV
+	if stream == null:
+		return
+	var p := AudioStreamPlayer2D.new()
+	p.name = "EngineSound"
+	p.stream = stream
+	p.bus = "Master"
+	p.max_distance = 600.0
+	p.volume_db = -12.0  # comfortable background level
+	p.play()
+	add_child(p)
+	_engine_player = p
 
 
 ## Safe GameState singleton accessor — returns null if not registered.
@@ -90,14 +186,23 @@ func _physics_process(delta: float) -> void:
 	if p == null:
 		return
 
+	# Do nothing while countdown runs.
+	if _input_locked:
+		queue_redraw()
+		return
+
 	_handle_input()
 
 	match car_state:
 		State.ACCELERATE:
 			accelerate_timer += delta
 			_accelerate(delta, p)
+			if _spin_dust:
+				_spin_dust.emitting = false
 		State.SPINNING:
 			_spin(delta, p)
+			if _spin_dust:
+				_spin_dust.emitting = true
 
 	move_and_slide()
 
@@ -128,11 +233,22 @@ func _physics_process(delta: float) -> void:
 	if get_last_slide_collision():
 		var col := get_last_slide_collision()
 		if col.get_collider() is StaticBody2D:
-			if _g(p, "wall_bounce", false):
+			# Shield absorbs wall hits.
+			if _shield_active:
+				_shield_active = false
+				force_spin(1 if randf() > 0.5 else -1, _shield_spin_force)
+			elif _g(p, "wall_bounce", false):
 				var rest = _g(p, "wall_bounce_restitution", 0.3)
 				velocity = velocity.bounce(col.get_normal()) * rest
 			else:
 				emit_signal("wall_hit")
+
+	# Tick down mega spin timer.
+	if _mega_spin_active:
+		_mega_spin_timer -= delta
+		if _mega_spin_timer <= 0.0:
+			_mega_spin_active = false
+			_mega_spin_timer = 0.0
 
 	queue_redraw()
 
@@ -142,11 +258,11 @@ func _handle_input() -> void:
 	var l: bool
 
 	if _accept_keyboard_input:
-		j = Input.is_key_pressed(KEY_A)
-		l = Input.is_key_pressed(KEY_D)
+		j = Input.is_key_pressed(KEY_A) and not _input_locked
+		l = Input.is_key_pressed(KEY_D) and not _input_locked
 	else:
-		j = _test_input_left
-		l = _test_input_right
+		j = _test_input_left and not _input_locked
+		l = _test_input_right and not _input_locked
 
 	var wants_spin = (j or l) and not (j and l)
 
@@ -163,12 +279,13 @@ func _handle_input() -> void:
 
 			spin_direction = -1 if j else 1
 			spin_timer = 0.0
+			_accumulated_spin_rotation = 0.0
 			spin_angular_velocity = _g(P(), "min_spin_rate", 0.5)
 			car_state = State.SPINNING
 			emit_signal("state_changed", State.SPINNING)
 	elif car_state == State.SPINNING:
-		var min_time = _g(P(), "spin_min_time", 1.0)
-		if not wants_spin and spin_timer >= min_time:
+		var min_rot = _g(P(), "spin_min_rotations", 6.0)
+		if not wants_spin and _accumulated_spin_rotation >= min_rot:
 			# Sideways grip on exit — kill lateral velocity, keep forward momentum.
 			var fwd := Vector2.RIGHT.rotated(global_rotation)
 			var fwd_speed = fwd.dot(velocity)
@@ -192,6 +309,8 @@ func _handle_input() -> void:
 				_last_boost = boost
 				_boost_flash_timer = 0.2
 				boost_applied.emit(boost)
+				if _boost_trail:
+					_boost_trail.emitting = true
 
 			car_state = State.ACCELERATE
 			accelerate_timer = 0.0
@@ -200,6 +319,7 @@ func _handle_input() -> void:
 			spin_direction = 0
 			spin_angular_velocity = 0.0
 			spin_timer = 0.0
+			_accumulated_spin_rotation = 0.0
 			emit_signal("state_changed", State.ACCELERATE)
 
 
@@ -249,6 +369,7 @@ func _spin(delta: float, p: Resource) -> void:
 
 	# Apply rotation.
 	global_rotation += spin_direction * spin_angular_velocity * delta
+	_accumulated_spin_rotation += abs(spin_angular_velocity) * delta
 
 	# Uniform velocity drag during spin — equal in all directions.
 	# The car drifts/slides equally in all directions while spinning so it
@@ -266,6 +387,10 @@ func _transfer_linear_to_rotational(_delta: float, p: Resource) -> void:
 	var efficiency = _g(p, "rotation_efficiency", 0.03)
 	if efficiency <= 0.0:
 		return
+
+	# Mega spin multiplier.
+	if _mega_spin_active:
+		efficiency *= _mega_spin_efficiency_mult
 
 	# Spin zone bonus — check if car is inside a coloured track section.
 	if _track_builder and _track_builder.has_method("get_spin_zone_factor"):
@@ -305,6 +430,17 @@ func start_race() -> void:
 	emit_signal("state_changed", State.ACCELERATE)
 
 
+## Apply a direct boost to forward velocity (used by enemies, powerups).
+func apply_boost(amount: float) -> void:
+	var fwd := Vector2.RIGHT.rotated(global_rotation)
+	velocity += fwd * amount
+	_last_boost = amount
+	_boost_flash_timer = 0.2
+	boost_applied.emit(amount)
+	if _boost_trail:
+		_boost_trail.emitting = true
+
+
 func reset(pos: Vector2, rot: float) -> void:
 	car_state = State.ACCELERATE
 	spin_direction = 0
@@ -323,12 +459,47 @@ func set_test_input(left: bool, right: bool) -> void:
 	_test_input_right = right
 
 
+## Force the car into spin state (used by boost pads, mines, etc.).
+## Respects the combo system and min_accelerate_time.
+func force_spin(direction: int, angular_velocity: float) -> void:
+	if car_state != State.ACCELERATE:
+		return
+	if accelerate_timer < _g(P(), "min_accelerate_time", 0.0):
+		return
+
+	# Combo: chain if grace timer still running.
+	if _combo_timer > 0.0 and _combo_count > 0:
+		_combo_count = min(_combo_count + 1, COMBO_MAX)
+	else:
+		_combo_count = 1
+	_combo_timer = 0.0
+	combo_changed.emit(_combo_count)
+
+	spin_direction = direction
+	spin_timer = 0.0
+	_accumulated_spin_rotation = 0.0
+	spin_angular_velocity = angular_velocity
+	car_state = State.SPINNING
+	emit_signal("state_changed", State.SPINNING)
+
+
 func _draw() -> void:
 	var p = P()
 	var dw = _g(p, "car_draw_width", 40.0) if p else 40.0
 	var dh = _g(p, "car_draw_height", 24.0) if p else 24.0
 
 	var rect := Rect2(-dw/2, -dh/2, dw, dh)
+
+	# Shadow below the car (dark ellipse, slightly offset).
+	var shadow_offset := Vector2(0.0, 3.0)
+	var shadow_radius := Vector2(dw * 0.45, dh * 0.35)
+	# Approximate ellipse with a 16‑vertex polygon.
+	var shadow_poly := PackedVector2Array()
+	var segs := 16
+	for k in range(segs):
+		var ang := TAU * k / segs
+		shadow_poly.append(shadow_offset + Vector2(cos(ang) * shadow_radius.x, sin(ang) * shadow_radius.y))
+	draw_colored_polygon(shadow_poly, Color(0.0, 0.0, 0.0, 0.25))
 
 	# Body colour: white at rest, yellow→orange→red as spin energy builds.
 	var body_color := Color.WHITE
@@ -339,6 +510,14 @@ func _draw() -> void:
 	# Boost flash overrides everything.
 	if _boost_flash_timer > 0.0:
 		body_color = Color(1.0, 1.0, 0.6)  # bright yellow flash
+
+	# Shield glow.
+	if _shield_active:
+		body_color = Color(0.4, 0.6, 1.0)  # blue shield tint
+
+	# Mega spin glow.
+	if _mega_spin_active:
+		body_color = Color(1.0, 0.9, 0.2)  # gold tint
 
 	draw_rect(rect, body_color)
 
@@ -351,3 +530,32 @@ func _draw() -> void:
 	if car_state == State.SPINNING:
 		var border := Color(1.0, 1.0 - spin_energy, 1.0 - spin_energy)
 		draw_rect(rect, border, false, 2.0)
+
+	# Shield ring.
+	if _shield_active:
+		draw_rect(rect, Color(0.2, 0.5, 1.0), false, 3.0)
+
+	# Mega spin border.
+	if _mega_spin_active:
+		draw_rect(rect, Color(1.0, 0.9, 0.0), false, 2.0)
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Powerup methods (called from obstacles / pickups)
+# ═════════════════════════════════════════════════════════════════════════
+
+## Grant a shield that absorbs the next wall hit.
+func grant_shield(spin_force: float) -> void:
+	_shield_active = true
+	_shield_spin_force = spin_force
+
+
+## Activate mega spin buff.
+func activate_mega_spin(duration: float, efficiency_mult: float, spin_force: float) -> void:
+	_mega_spin_active = true
+	_mega_spin_timer = duration
+	_mega_spin_efficiency_mult = efficiency_mult
+	_mega_spin_force = spin_force
+	# Force entry into spin.
+	if car_state == State.ACCELERATE:
+		force_spin(1 if randf() > 0.5 else -1, spin_force)
