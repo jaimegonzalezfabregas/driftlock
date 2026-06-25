@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://test_e2e_menu_flow"]
+
+[ext_resource type="Script" path="res://tests/test_e2e_menu_flow.gd" id="1"]
+
+[node name="TestE2eMenuFlow" type="Node2D"]
+script = ExtResource("1")

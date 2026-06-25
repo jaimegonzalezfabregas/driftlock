@@ -18,7 +18,7 @@ func _build_level_buttons() -> void:
 		child.queue_free()
 
 	var gs = Engine.get_singleton("GameState") if Engine.has_singleton("GameState") else null
-	var count := gs.LEVEL_COUNT if gs else 7
+	var count: int = gs.LEVEL_COUNT if gs else 7
 
 	for i in range(count):
 		var unlocked: bool = gs.unlocked_levels[i] if gs else i == 0
@@ -31,7 +31,7 @@ func _build_level_buttons() -> void:
 		if not unlocked:
 			btn.text = "?? " + btn.text
 			btn.disabled = true
-		btn.theme_override_font_sizes["font_size"] = 20
+		btn.add_theme_font_size_override("font_size", 20)
 		var idx := i
 		var unlocked_state := unlocked
 		btn.pressed.connect(_on_level_pressed.bind(idx, unlocked_state))
