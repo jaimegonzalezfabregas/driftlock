@@ -82,6 +82,13 @@ var end_dir: Vector2
 func _ready() -> void:
 	if Engine.is_editor_hint():
 		return          # editor mode — only draw
+	# Collision is now built on demand via rebuild_collision()
+	# so that level_base can set a procedural curve first.
+
+
+## Build (or rebuild) collision walls from the current curve.
+## Called by level_base._ready() after setting a procedural curve.
+func rebuild_collision() -> void:
 	_build_collision()
 
 

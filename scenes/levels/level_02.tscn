@@ -1,32 +1,13 @@
-[gd_scene load_steps=4 format=3 uid="uid://level_02_auto"]
+[gd_scene format=3]
 
-[ext_resource type="Script" path="res://scenes/levels/level_02.gd" id="1"]
+[ext_resource type="Script" path="res://scenes/levels/level_instance.gd" id="1"]
 [ext_resource type="Script" uid="uid://bpthnnhd5py3j" path="res://scripts/track_builder.gd" id="2"]
 
-[sub_resource type="Curve2D" id="Curve2D_level02"]
-_data = {
-"points": PackedVector2Array(-83.3, 15, 83.3, -15, 600, 450, -83.72086, 3, 83.72086, -3, 850, 390, -41.062595, -78.7, 41.062595, 78.7, 1050, 480, 28.99211, -59, -28.99211, 59, 1050, 680, 106, -23.7, -106, 23.7, 880, 830, 93.3, -1.7000008, -93.3, 1.7000008, 550, 850, 88.032326, 14, -88.032326, -14, 235, 880, 50.823673, 86, -50.823673, -86, 59, 736, -65.59416, 59, 65.59416, -59, 87, 511, -24.699997, 6, 24.699997, -6, 300, 450, -66.7, 0, 33.3, 0, 500, 450)
-}
-point_count = 11
-
-[node name="Level002" type="Node2D"]
+[node name="Level02" type="Node2D"]
 script = ExtResource("1")
 
 [node name="TrackPath" type="Path2D" parent="."]
-position = Vector2(513.9322, 244)
-scale = Vector2(1.0213095, 1)
-curve = SubResource("Curve2D_level02")
 script = ExtResource("2")
-track_width = 220.0
-segment_distance = 25.0
-spin_zones = Array[Dictionary]([{
-"color": Color(0.2, 0.5, 1, 0.25),
-"end_offset": 5500.0,
-"factor": 2.5,
-"start_offset": 3000.0
-}, {
-"color": Color(1, 0.3, 0.3, 0.25),
-"end_offset": 10000.0,
-"factor": 2.5,
-"start_offset": 7500.0
-}])
+track_width = 200.0
+segment_distance = 30.0
+

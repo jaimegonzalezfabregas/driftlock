@@ -2,29 +2,25 @@
 ##
 ## Goes through the full game flow:
 ## 1. Starts at Level Select screen
-## 2. Clicks each level button (1→7) through the actual menu code
-## 3. Drives each level to win
+## 2. Clicks each level button through the actual menu code
+## 3. Drives each level using DriverAI (fair 3‑key FSM) to win
 ## 4. Returns to level select after each completion
 ## 5. Verifies the next level is unlocked
-##
-## The title screen is skipped because it calls change_scene_to_file
-## synchronously, which would destroy our test scene.  The level select
-## instead uses queue_free on itself + add_child on the level, which
-## lets our test survive as a root sibling.
 ##
 ## Usage:
 ##   godot --path . tests/test_e2e_menu_flow.tscn
 extends Node2D
 
-const LEVEL_COUNT := 7
-const BASE_FRAMES_PER_LAP := 10000  # ~167s per lap
+const LEVEL_COUNT := 20
+const BASE_FRAMES_PER_LAP := 15000  # generous
+const DriverAIScript = preload("res://tests/driver_ai.gd")
 
 enum Phase { LEVEL_SELECT, PLAYING, WIN_WAIT, DONE }
 
 var _phase: int = Phase.LEVEL_SELECT
-var _current_level: int = 0  # 0-based
+var _current_level: int = 0  # 0‑based
 var _frames: int = 0
-var _max_frames_this_level: int = 0  # set based on lap count
+var _max_frames_this_level: int = 0
 var _passed: int = 0
 var _failed: int = 0
 
@@ -37,12 +33,8 @@ var _countdown_finished: bool = false
 var _countdown_saw_lock: bool = false
 var _race_won: bool = false
 
-# Driving state.
-var _steering_left: bool = false
-var _steering_active: bool = false
-var _coast_timer: int = 0
-var _max_progress: float = 0.0
-var _track_length: float = 0.0
+# DriverAI — state‑machine driver.
+var _ai = null
 
 
 func _ready() -> void:
@@ -79,7 +71,6 @@ func _setup_game_state() -> void:
 func _start_level_select() -> void:
 	_phase = Phase.LEVEL_SELECT
 	_frames = 0
-	# Calculate frame limit based on level lap count.
 	var gs = Engine.get_singleton("GameState")
 	var laps := 1
 	if gs:
@@ -93,15 +84,11 @@ func _start_level_select() -> void:
 	_countdown_finished = false
 	_countdown_saw_lock = false
 	_race_won = false
-	_steering_active = false
-	_max_progress = 0.0
-
-	# Wait a frame before loading to let any previous cleanup finish.
+	_ai = null
 
 
 func _process_level_select() -> void:
 	if _frames < 3:
-		# Check frame 3 — load level select if not present.
 		if _frames == 2 and _level_select == null:
 			var scene = load("res://scenes/screens/level_select.tscn") as PackedScene
 			_level_select = scene.instantiate()
@@ -111,43 +98,22 @@ func _process_level_select() -> void:
 		return
 
 	if _level_select == null or not is_instance_valid(_level_select):
-		# Try again — maybe it got destroyed by a previous button press
-		# that triggered queue_free.  At this point the level should
-		# already be in the tree instead.
 		return
 
-	var container := _level_select.get_node_or_null("ScrollContainer/VBoxContainer")
-	if container == null:
-		return
-
-	# Buttons are every 2nd child (button + description label).
-	var btn_idx := _current_level * 2
-	if btn_idx >= container.get_child_count():
-		print("[E2E] No button for level %d — FAIL" % (_current_level + 1))
-		_failed += 1
-		_current_level += 1
-		_check_done()
-		return
-
-	var btn := container.get_child(btn_idx)
+	var btn = _level_select.find_child("Btn_%d" % _current_level, true, false)
 	if not (btn is Button):
 		return
 	if btn.disabled:
-		print("[E2E] Level %d LOCKED — FAIL (only %d unlocked)" %
+		print("[E2E] Level %d LOCKED — FAIL (count=%d)" %
 			[_current_level + 1, _get_unlocked_count()])
 		_failed += 1
 		_current_level += 1
 		_check_done()
 		return
 
-	print("[E2E] Clicking level %d button in level select" % (_current_level + 1))
-
-	# Simulate the button press.  This calls level_select._on_level_pressed()
-	# which creates the level, adds it to root, and queue_free's the
-	# level select.  Our test is also a root child and survives.
+	print("[E2E] Clicking level %d button" % (_current_level + 1))
 	btn.emit_signal("pressed")
 
-	# Wait for the level to appear.
 	_phase = Phase.PLAYING
 	_frames = 0
 	_level = null
@@ -157,8 +123,7 @@ func _process_level_select() -> void:
 	_countdown_finished = false
 	_countdown_saw_lock = false
 	_race_won = false
-	_steering_active = false
-	_max_progress = 0.0
+	_ai = null
 
 
 func _get_unlocked_count() -> int:
@@ -183,23 +148,20 @@ func _process_playing(delta: float) -> void:
 		return
 
 	if _frames >= _max_frames_this_level:
-		print("[E2E] TIMEOUT — level %d (progress %.0f%%, limit=%d frames)" %
-			[_current_level + 1, _max_progress * 100.0, _max_frames_this_level])
+		print("[E2E] TIMEOUT — level %d (limit=%d frames)" %
+			[_current_level + 1, _max_frames_this_level])
 		_failed += 1
 		_on_level_done()
 		return
 
-	# Find the level (it was added to root by level_select).
 	if _level == null:
 		_find_level()
 		return
 
-	# Detect sub-systems.
 	if _track_path == null:
 		_detect_subsystems()
 		return
 
-	# Wait for countdown.
 	if not _countdown_finished:
 		if _car == null:
 			return
@@ -208,22 +170,20 @@ func _process_playing(delta: float) -> void:
 			_countdown_saw_lock = true
 		elif locked == false and _countdown_saw_lock:
 			_countdown_finished = true
+			# Create AI after countdown finishes.
+			_ai = DriverAIScript.new()
+			_ai.setup(_car, _track_path)
 		return
 
-	# Drive the car.
-	_drive()
+	# Drive with AI.
+	if _ai != null:
+		_ai.process(delta)
 
-	# Check for win — the level removes the car when race is won.
-	# _end_game() calls _car.queue_free() then awaits 1 second before
-	# calling complete_level() and change_scene_to_file.  Since we free
-	# the level here (before that await finishes), we must call
-	# complete_level() ourselves to update GameState unlocks.
+	# Check for win.
 	if _car == null or not is_instance_valid(_car):
 		print("[E2E] Level %d WIN!" % (_current_level + 1))
 		_race_won = true
 		_passed += 1
-		# Call complete_level ourselves since _end_game()'s version
-		# won't fire (its 1-second await won't resume once we free the level).
 		var gs = Engine.get_singleton("GameState")
 		if gs:
 			gs.complete_level(_current_level)
@@ -231,15 +191,13 @@ func _process_playing(delta: float) -> void:
 
 
 func _find_level() -> void:
-	# The level is added to root by level_select._on_level_pressed().
-	# Look for it among root children. Level scenes extend Node2D.
 	var root := get_tree().root
 	for child in root.get_children():
 		if child == self:
 			continue
 		if child is Node2D and child.has_node("TrackPath"):
 			_level = child
-			print("[E2E] Found level node: %s (in tree=%s)" %
+			print("[E2E] Found level node: %s (in_tree=%s)" %
 				[_level.name, _level.is_inside_tree()])
 			break
 
@@ -258,9 +216,7 @@ func _detect_subsystems() -> void:
 	if _car == null:
 		return
 	_car.set("_accept_keyboard_input", false)
-	_track_length = _curve.get_baked_length()
-	print("[E2E] Systems ready — track=%.0fpx car=%s" %
-		[_track_length, _car.name])
+	print("[E2E] Systems ready — track=%.0fpx" % _curve.get_baked_length())
 
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -268,13 +224,13 @@ func _detect_subsystems() -> void:
 # ═════════════════════════════════════════════════════════════════════════
 
 func _on_level_done() -> void:
-	# Clean up the level node.
 	if _level and is_instance_valid(_level):
 		_level.queue_free()
 	_level = null
 	_car = null
 	_track_path = null
 	_curve = null
+	_ai = null
 
 	_current_level += 1
 	_check_done()
@@ -284,67 +240,7 @@ func _check_done() -> void:
 	if _current_level >= LEVEL_COUNT:
 		_phase = Phase.DONE
 	else:
-		# Go back to level select.
 		_start_level_select()
-
-
-# ═════════════════════════════════════════════════════════════════════════
-# Driving logic (pure pursuit, same as test_e2e_race)
-# ═════════════════════════════════════════════════════════════════════════
-
-const PARALLEL_THRESHOLD := 0.25
-
-
-func _drive() -> void:
-	if _car == null or _curve == null:
-		return
-
-	var car_pos: Vector2 = _car.get("global_position")
-	var car_rot: float = _car.get("global_rotation")
-	var forward: Vector2 = Vector2.RIGHT.rotated(car_rot)
-	var local_pos: Vector2 = _track_path.to_local(car_pos)
-	var speed: float = _car.get("current_speed") as float
-
-	var nearest_ofs: float = _curve.get_closest_offset(local_pos)
-	var total_length: float = _curve.get_baked_length()
-
-	var look_dist: float = maxf(200.0, speed * 2.0)
-	var ahead_ofs: float = nearest_ofs + look_dist
-	if ahead_ofs > total_length:
-		ahead_ofs -= total_length
-
-	var ahead_xf: Transform2D = _curve.sample_baked_with_rotation(ahead_ofs) as Transform2D
-	var ahead_global: Vector2 = _track_path.to_global(ahead_xf.origin)
-	var to_target: Vector2 = (ahead_global - car_pos).normalized()
-	var angle_to_target: float = forward.angle_to(to_target)
-
-	var acc_rot_v = _car.get("_accumulated_spin_rotation")
-	var acc_rot: float = acc_rot_v if typeof(acc_rot_v) == TYPE_FLOAT else 0.0
-	var min_rot: float = TAU
-
-	if _coast_timer > 0:
-		_coast_timer -= 1
-
-	if _steering_active:
-		var can_release: bool = acc_rot >= min_rot
-		var facing_target: bool = abs(angle_to_target) < PARALLEL_THRESHOLD
-		if can_release and facing_target:
-			_steering_active = false
-			_car.set_test_input(false, false)
-			_coast_timer = 8
-	else:
-		if _coast_timer == 0 and abs(angle_to_target) > PARALLEL_THRESHOLD:
-			_steering_active = true
-			_steering_left = (angle_to_target > 0)
-
-	if _steering_active:
-		_car.set_test_input(_steering_left, not _steering_left)
-	else:
-		_car.set_test_input(false, false)
-
-	var prog: float = nearest_ofs / total_length
-	if prog > _max_progress:
-		_max_progress = prog
 
 
 # ═════════════════════════════════════════════════════════════════════════

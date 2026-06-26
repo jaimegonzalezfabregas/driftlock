@@ -1,8 +1,16 @@
+## Drift-lock car controller — CharacterBody2D with a node‑based
+## finite‑state machine (StoppedState / AccelerateState / SpinState).
+class_name Car
 extends CharacterBody2D
 
-enum State { ACCELERATE, SPINNING }
+## Renamed to CarMode to avoid clashing with class_name State from state.gd.
+enum CarMode { STOPPED, ACCELERATE, SPINNING }
 
-var car_state: State = State.ACCELERATE
+## Backward‑compatible numeric state — derived from the FSM state name.
+var car_state: CarMode = CarMode.STOPPED:
+	set(v):
+		car_state = v
+		state_changed.emit(v)
 var spin_direction: int = 0
 var spin_angular_velocity: float = 0.0   # rad/s
 var spin_timer: float = 0.0              # seconds spent in current spin
@@ -10,6 +18,15 @@ var _accumulated_spin_rotation: float = 0.0  # total rad rotated this spin
 var accelerate_timer: float = 0.0        # seconds spent in current accelerate
 var current_speed: float = 0.0
 var spin_energy: float = 0.0            # normalised 0–1 for UI
+
+# ── Spin stuck timeout ──────────────────────────────────────────────
+## If the car is SPINNING at very low speed for this many consecutive
+## seconds, force-exit to prevent getting permanently stuck against a wall.
+const SPIN_STUCK_TIMEOUT: float = 3.0
+const SPIN_STUCK_SPEED: float = 25.0
+var _spin_stuck_timer: float = 0.0
+## Brief grace after force-exit to prevent AI from instantly re-entering spin.
+var _stuck_recovery_timer: float = 0.0
 
 var _last_boost: float = 0.0            # most recent boost amount (for FX)
 var _boost_flash_timer: float = 0.0     # seconds remaining of boost flash
@@ -27,11 +44,13 @@ const COMBO_MAX: int = 5                # cap combo at 5 → 3.0× boost
 
 var _test_input_left: bool = false
 var _test_input_right: bool = false
+var _test_input_accelerate: bool = false
 var _accept_keyboard_input: bool = true
 var _input_locked: bool = false  # blocks keyboard input (used by countdown)
 var _PP = preload("res://resources/physics_params.gd")
 var _local_params: Resource = null
 var _track_builder: Node = null  # set by level_base after spawn
+var _state_machine: Node = null  # set in _ready()
 
 # Particle FX nodes.
 var _spin_dust: GPUParticles2D = null
@@ -40,18 +59,7 @@ var _boost_trail: GPUParticles2D = null
 # Audio.
 var _engine_player: AudioStreamPlayer2D = null
 
-# ── Powerup / shield state ──────────────────────────────────────────────
-## Shield absorbs the next wall hit — enters spin instead of dying.
-var _shield_active: bool = false
-var _shield_spin_force: float = 0.0
-
-## Mega spin temporary buff.
-var _mega_spin_active: bool = false
-var _mega_spin_timer: float = 0.0
-var _mega_spin_efficiency_mult: float = 1.0
-var _mega_spin_force: float = 0.0
-
-signal state_changed(new_state: State)
+signal state_changed(new_state: CarMode)
 signal wall_hit()
 signal boost_applied(amount: float)
 signal combo_changed(count: int)
@@ -70,6 +78,11 @@ func _ready() -> void:
 	_setup_particles()
 	_setup_audio()
 	add_to_group("car")
+
+	# Initialise the node‑based FSM (child node in car.tscn).
+	_state_machine = get_node_or_null("StateMachine")
+	if not _state_machine:
+		push_warning("car.gd: no StateMachine child node — FSM disabled")
 
 
 func _ensure_params() -> void:
@@ -162,11 +175,16 @@ func _setup_audio() -> void:
 
 
 ## Safe GameState singleton accessor — returns null if not registered.
-## Not declared with a concrete type to avoid compile-time resolution
-## of the GameState autoload in test environments.
-static func _singleton():
+## Returns the GameState singleton or null.
+## Tries Engine singleton first (for test environments), then falls back
+## to tree lookup (for Godot 4.5.2 where the autoload * prefix may not
+## register the Engine singleton properly).
+func _singleton():
 	if Engine.has_singleton("GameState"):
 		return Engine.get_singleton("GameState")
+	var tree := get_tree()
+	if tree:
+		return tree.root.get_node_or_null("GameState")
 	return null
 
 
@@ -191,23 +209,13 @@ func _physics_process(delta: float) -> void:
 		queue_redraw()
 		return
 
-	_handle_input()
-
-	match car_state:
-		State.ACCELERATE:
-			accelerate_timer += delta
-			_accelerate(delta, p)
-			if _spin_dust:
-				_spin_dust.emitting = false
-		State.SPINNING:
-			_spin(delta, p)
-			if _spin_dust:
-				_spin_dust.emitting = true
+	# Delegate to the state machine (drives the active state).
+	if _state_machine:
+		_state_machine.physics_update(delta)
 
 	move_and_slide()
 
 	# Air drag: F_drag = air_drag × v² opposes motion every frame.
-	# This gives a natural top speed without hard-clamping velocity.
 	var speed = velocity.length()
 	if speed > 0.0:
 		var drag_force: float = _g(p, "air_drag", 0.4) * speed * speed
@@ -220,7 +228,8 @@ func _physics_process(delta: float) -> void:
 	spin_energy = clampf(spin_angular_velocity / 80.0, 0.0, 1.0)
 
 	# Combo grace timer — ticks down during ACCELERATE, resets combo on expiry.
-	if car_state == State.ACCELERATE and _combo_count > 0:
+	# (CarState states manage combo start/chain; this handles expiry.)
+	if _combo_timer > 0.0:
 		_combo_timer -= delta
 		if _combo_timer <= 0.0:
 			_combo_timer = 0.0
@@ -230,204 +239,43 @@ func _physics_process(delta: float) -> void:
 	if _boost_flash_timer > 0.0:
 		_boost_flash_timer -= delta
 
+	# Stuck-recovery grace timer.
+	if _stuck_recovery_timer > 0.0:
+		_stuck_recovery_timer -= delta
+
+	# Sync backward‑compat car_state from the active state name.
+	if _state_machine and _state_machine.state:
+		var sn: String = _state_machine.state.name
+		var new_state: CarMode
+		match sn:
+			"StoppedState":   new_state = CarMode.STOPPED
+			"AccelerateState": new_state = CarMode.ACCELERATE
+			"SpinState":       new_state = CarMode.SPINNING
+			_:                 new_state = CarMode.STOPPED
+		if car_state != new_state:
+			car_state = new_state  # setter emits state_changed
+
 	if get_last_slide_collision():
 		var col := get_last_slide_collision()
 		if col.get_collider() is StaticBody2D:
-			# Shield absorbs wall hits.
-			if _shield_active:
-				_shield_active = false
-				force_spin(1 if randf() > 0.5 else -1, _shield_spin_force)
-			elif _g(p, "wall_bounce", false):
+			if _g(p, "wall_bounce", false):
 				var rest = _g(p, "wall_bounce_restitution", 0.3)
 				velocity = velocity.bounce(col.get_normal()) * rest
 			else:
 				emit_signal("wall_hit")
 
-	# Tick down mega spin timer.
-	if _mega_spin_active:
-		_mega_spin_timer -= delta
-		if _mega_spin_timer <= 0.0:
-			_mega_spin_active = false
-			_mega_spin_timer = 0.0
-
 	queue_redraw()
 
 
-func _handle_input() -> void:
-	var j: bool
-	var l: bool
-
-	if _accept_keyboard_input:
-		j = Input.is_key_pressed(KEY_A) and not _input_locked
-		l = Input.is_key_pressed(KEY_D) and not _input_locked
-	else:
-		j = _test_input_left and not _input_locked
-		l = _test_input_right and not _input_locked
-
-	var wants_spin = (j or l) and not (j and l)
-
-	if car_state == State.ACCELERATE:
-		var min_time = _g(P(), "min_accelerate_time", 0.0)
-		if wants_spin and accelerate_timer >= min_time:
-			# ── Combo: if grace timer still running, chain the spin ──
-			if _combo_timer > 0.0 and _combo_count > 0:
-				_combo_count = min(_combo_count + 1, COMBO_MAX)
-			else:
-				_combo_count = 1
-			_combo_timer = 0.0
-			combo_changed.emit(_combo_count)
-
-			spin_direction = -1 if j else 1
-			spin_timer = 0.0
-			_accumulated_spin_rotation = 0.0
-			spin_angular_velocity = _g(P(), "min_spin_rate", 0.5)
-			car_state = State.SPINNING
-			emit_signal("state_changed", State.SPINNING)
-	elif car_state == State.SPINNING:
-		var min_rot = _g(P(), "spin_min_rotations", 6.0)
-		if not wants_spin and _accumulated_spin_rotation >= min_rot:
-			# Sideways grip on exit — kill lateral velocity, keep forward momentum.
-			var fwd := Vector2.RIGHT.rotated(global_rotation)
-			var fwd_speed = fwd.dot(velocity)
-			velocity = fwd * fwd_speed
-
-			# SPIN‑TO‑WIN: convert accumulated rotational energy to speed boost.
-			var p_exit = P()
-			var boost_mult = _g(p_exit, "spin_boost_multiplier", 3.0)
-			var boost_cap = _g(p_exit, "spin_boost_cap", 600.0)
-			var boost = minf(spin_angular_velocity * boost_mult, boost_cap)
-
-			# Combo multiplier: each consecutive spin within the grace
-			# window adds +0.5× to the boost (capped at 3.0× total).
-			if boost > 0.0 and _combo_count > 1:
-				var combo_factor := 1.0 + (_combo_count - 1) * COMBO_BOOST_PER_STEP
-				combo_factor = minf(combo_factor, 3.0)
-				boost *= combo_factor
-
-			if boost > 0.0:
-				velocity += fwd * boost
-				_last_boost = boost
-				_boost_flash_timer = 0.2
-				boost_applied.emit(boost)
-				if _boost_trail:
-					_boost_trail.emitting = true
-
-			car_state = State.ACCELERATE
-			accelerate_timer = 0.0
-			# Start combo grace timer — spin again within this window to chain.
-			_combo_timer = COMBO_GRACE_PERIOD
-			spin_direction = 0
-			spin_angular_velocity = 0.0
-			spin_timer = 0.0
-			_accumulated_spin_rotation = 0.0
-			emit_signal("state_changed", State.ACCELERATE)
-
-
-func _accelerate(delta: float, p: Resource) -> void:
-	var forward := Vector2.RIGHT.rotated(global_rotation)
-	var power = _g(p, "engine_power", 20_000_000.0)
-	var mass = _g(p, "car_mass", 1000.0)
-
-	# Power‑based acceleration: F = P / v,  a = F / m.
-	# At speed v the forward acceleration is a = P / (m · v).
-	# This naturally decreases as speed rises — doubling the speed halves
-	# the acceleration.  Capped at `_max_fwd_accel` near standstill to
-	# avoid P/0 and give a snappy launch.
-	var _max_fwd_accel := 600.0
-	var fwd_speed = forward.dot(velocity)
-	var speed = abs(fwd_speed)
-	var accel = power / (mass * maxf(speed, 1.0))
-	accel = minf(accel, _max_fwd_accel)
-
-	# Engine force always pushes forward — even if the car is rolling
-	# backward, the engine fights it.
-	var fwd_impulse = forward * accel * delta
-	velocity += fwd_impulse
-
-	# Floor: never drop below min forward speed while accelerating.
-	# Recalculate forward speed after impulse.
-	fwd_speed = forward.dot(velocity)
-	var min_speed = _g(p, "min_linear_speed", 50.0)
-	if fwd_speed < min_speed:
-		velocity += forward * (min_speed - fwd_speed)
-
-
-func _spin(delta: float, p: Resource) -> void:
-	spin_timer += delta
-
-	# Continuous linear‑to‑rotational energy transfer.
-	_transfer_linear_to_rotational(delta, p)
-
-	# Drag angular velocity (tire friction during spin).
-	var drag = _g(p, "spin_drag", 0.97)
-	spin_angular_velocity *= pow(drag, delta * 60.0)
-
-	# Clamp to minimum spin rate (car keeps rotating even when nearly stopped).
-	var min_rate = _g(p, "min_spin_rate", 0.5)
-	if abs(spin_angular_velocity) < min_rate:
-		spin_angular_velocity = sign(spin_angular_velocity) * min_rate
-
-	# Apply rotation.
-	global_rotation += spin_direction * spin_angular_velocity * delta
-	_accumulated_spin_rotation += abs(spin_angular_velocity) * delta
-
-	# Uniform velocity drag during spin — equal in all directions.
-	# The car drifts/slides equally in all directions while spinning so it
-	# maintains a straight-line drift.  Sideways grip only engages on spin
-	# exit (when the turn key is released) — see _handle_input().
-	var vel_drag = _g(p, "spin_velocity_drag", 0.85)
-	velocity *= pow(vel_drag, delta * 60.0)
-
-
-## Each frame during a spin, convert a fraction of the car's linear
-## kinetic energy into rotational kinetic energy.  `rotation_efficiency`
-## is the fraction transferred each frame — linear energy gets depleted
-## by that amount, so the car slows down.
-func _transfer_linear_to_rotational(_delta: float, p: Resource) -> void:
-	var efficiency = _g(p, "rotation_efficiency", 0.03)
-	if efficiency <= 0.0:
-		return
-
-	# Mega spin multiplier.
-	if _mega_spin_active:
-		efficiency *= _mega_spin_efficiency_mult
-
-	# Spin zone bonus — check if car is inside a coloured track section.
-	if _track_builder and _track_builder.has_method("get_spin_zone_factor"):
-		var factor = _track_builder.get_spin_zone_factor(global_position) as float
-		efficiency *= factor
-
-	var mass = _g(p, "car_mass", 1000.0)
-	var I = _g(p, "angular_mass", 1500.0)    # moment of inertia
-
-	var v = velocity.length()
-	if v < 1.0:
-		return   # too slow for meaningful transfer
-
-	# Transfer a fraction of current linear KE to rotational KE.
-	var E_lin = 0.5 * mass * v * v
-	var E_transfer = E_lin * efficiency
-	if E_transfer <= 0.0:
-		return
-
-	# Linear speed drops by the transferred energy.
-	var E_lin_new = E_lin - E_transfer
-	var v_new = sqrt(maxf(0.0, 2.0 * E_lin_new / mass))
-	velocity = velocity.normalized() * v_new
-
-	# Rotational speed increases by the transferred energy.
-	var E_rot_current = 0.5 * I * spin_angular_velocity * spin_angular_velocity
-	var E_rot_new = E_rot_current + E_transfer
-	spin_angular_velocity = sqrt(2.0 * E_rot_new / I)
-
-
 func start_race() -> void:
-	car_state = State.ACCELERATE
-	var p = P()
-	var initial: float = _g(p, "initial_speed", 100.0)
-	velocity = Vector2.RIGHT.rotated(global_rotation) * initial
-	current_speed = initial
-	emit_signal("state_changed", State.ACCELERATE)
+	## Called after countdown.  Car enters STOPPED state — waits for
+	## Space / test_input_accelerate before moving.
+	if _state_machine and _state_machine.has_method("transition_to"):
+		_state_machine.transition_to("StoppedState")
+	velocity = Vector2.ZERO
+	current_speed = 0.0
+	_test_input_accelerate = false
+	car_state = CarMode.STOPPED
 
 
 ## Apply a direct boost to forward velocity (used by enemies, powerups).
@@ -442,7 +290,8 @@ func apply_boost(amount: float) -> void:
 
 
 func reset(pos: Vector2, rot: float) -> void:
-	car_state = State.ACCELERATE
+	if _state_machine and _state_machine.has_method("transition_to"):
+		_state_machine.transition_to("AccelerateState")
 	spin_direction = 0
 	spin_angular_velocity = 0.0
 	spin_timer = 0.0
@@ -451,36 +300,24 @@ func reset(pos: Vector2, rot: float) -> void:
 	_test_input_right = false
 	global_position = pos
 	global_rotation = rot
-	emit_signal("state_changed", State.ACCELERATE)
+	car_state = CarMode.ACCELERATE
 
 
-func set_test_input(left: bool, right: bool) -> void:
+func set_test_input(left: bool, right: bool, accelerate: bool = true) -> void:
 	_test_input_left = left
 	_test_input_right = right
+	_test_input_accelerate = accelerate
 
 
-## Force the car into spin state (used by boost pads, mines, etc.).
-## Respects the combo system and min_accelerate_time.
+## Force the car into spin state (used by test / external triggers).
 func force_spin(direction: int, angular_velocity: float) -> void:
-	if car_state != State.ACCELERATE:
-		return
-	if accelerate_timer < _g(P(), "min_accelerate_time", 0.0):
-		return
-
-	# Combo: chain if grace timer still running.
-	if _combo_timer > 0.0 and _combo_count > 0:
-		_combo_count = min(_combo_count + 1, COMBO_MAX)
-	else:
-		_combo_count = 1
-	_combo_timer = 0.0
-	combo_changed.emit(_combo_count)
-
+	if _state_machine and _state_machine.has_method("transition_to"):
+		_state_machine.transition_to("SpinState", {
+			"direction": direction,
+			"angular_velocity": angular_velocity
+		})
 	spin_direction = direction
-	spin_timer = 0.0
-	_accumulated_spin_rotation = 0.0
 	spin_angular_velocity = angular_velocity
-	car_state = State.SPINNING
-	emit_signal("state_changed", State.SPINNING)
 
 
 func _draw() -> void:
@@ -511,14 +348,6 @@ func _draw() -> void:
 	if _boost_flash_timer > 0.0:
 		body_color = Color(1.0, 1.0, 0.6)  # bright yellow flash
 
-	# Shield glow.
-	if _shield_active:
-		body_color = Color(0.4, 0.6, 1.0)  # blue shield tint
-
-	# Mega spin glow.
-	if _mega_spin_active:
-		body_color = Color(1.0, 0.9, 0.2)  # gold tint
-
 	draw_rect(rect, body_color)
 
 	var tip = Vector2(dw/2 + 2, 0)
@@ -527,35 +356,13 @@ func _draw() -> void:
 	draw_colored_polygon(PackedVector2Array([tip, l, r]), Color(0.85, 0.85, 0.85))
 
 	# Spin border: red outline while spinning, intensity matches energy.
-	if car_state == State.SPINNING:
+	if car_state == CarMode.SPINNING:
 		var border := Color(1.0, 1.0 - spin_energy, 1.0 - spin_energy)
 		draw_rect(rect, border, false, 2.0)
 
-	# Shield ring.
-	if _shield_active:
-		draw_rect(rect, Color(0.2, 0.5, 1.0), false, 3.0)
-
-	# Mega spin border.
-	if _mega_spin_active:
-		draw_rect(rect, Color(1.0, 0.9, 0.0), false, 2.0)
-
 
 # ═════════════════════════════════════════════════════════════════════════
-# Powerup methods (called from obstacles / pickups)
+# Powerup methods (called from pickups)
 # ═════════════════════════════════════════════════════════════════════════
 
-## Grant a shield that absorbs the next wall hit.
-func grant_shield(spin_force: float) -> void:
-	_shield_active = true
-	_shield_spin_force = spin_force
-
-
-## Activate mega spin buff.
-func activate_mega_spin(duration: float, efficiency_mult: float, spin_force: float) -> void:
-	_mega_spin_active = true
-	_mega_spin_timer = duration
-	_mega_spin_efficiency_mult = efficiency_mult
-	_mega_spin_force = spin_force
-	# Force entry into spin.
-	if car_state == State.ACCELERATE:
-		force_spin(1 if randf() > 0.5 else -1, spin_force)
+# (no powerups in the current build)

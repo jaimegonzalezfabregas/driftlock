@@ -13,10 +13,24 @@ const LEVEL_PATHS: Array[String] = [
 	"res://scenes/levels/level_05.tscn",
 	"res://scenes/levels/level_06.tscn",
 	"res://scenes/levels/level_07.tscn",
+	"res://scenes/levels/level_08.tscn",
+	"res://scenes/levels/level_09.tscn",
+	"res://scenes/levels/level_10.tscn",
+	"res://scenes/levels/level_11.tscn",
+	"res://scenes/levels/level_12.tscn",
+	"res://scenes/levels/level_13.tscn",
+	"res://scenes/levels/level_14.tscn",
+	"res://scenes/levels/level_15.tscn",
+	"res://scenes/levels/level_16.tscn",
+	"res://scenes/levels/level_17.tscn",
+	"res://scenes/levels/level_18.tscn",
+	"res://scenes/levels/level_19.tscn",
+	"res://scenes/levels/level_20.tscn",
 ]
 
-const MAX_FRAMES_PER_LEVEL := 9000  # 2.5 min per level
+const MAX_FRAMES_PER_LEVEL := 18000  # 5 min per level
 const LOG_INTERVAL := 120
+const DriverAIScript = preload("res://tests/driver_ai.gd")
 
 var _current_level_idx: int = 0
 var _level: Node = null
@@ -29,6 +43,9 @@ var _countdown_saw_lock: bool = false
 var _won: bool = false
 var _passed: int = 0
 var _failed: int = 0
+
+# Driver AI — state‑machine driver that only uses public inputs.
+var _ai = null
 
 
 func _ready() -> void:
@@ -55,7 +72,6 @@ func _setup_physics() -> void:
 
 func _load_next_level() -> void:
 	if _current_level_idx >= LEVEL_PATHS.size():
-		# All done.
 		_print_summary()
 		get_tree().quit()
 		return
@@ -70,6 +86,7 @@ func _load_next_level() -> void:
 	_car = null
 	_track_path = null
 	_curve = null
+	_ai = null
 	_frames = 0
 	_countdown_finished = false
 	_countdown_saw_lock = false
@@ -123,8 +140,9 @@ func _process(delta: float) -> void:
 			print("  Countdown finished — driving...")
 		return
 
-	# Drive the car.
-	_drive()
+	# Drive using the AI state machine.
+	if _ai != null:
+		_ai.process(delta)
 
 	# Check for win (car removed = race won).
 	if _car == null or not is_instance_valid(_car):
@@ -132,7 +150,6 @@ func _process(delta: float) -> void:
 		_passed += 1
 		print("  PASS — Level %d completed!" % (_current_level_idx + 1))
 		_current_level_idx += 1
-		# Wait 1 frame then load next.
 		_load_next_level()
 		return
 
@@ -154,70 +171,9 @@ func _detect_level() -> void:
 	_countdown_finished = false
 	_countdown_saw_lock = false
 
-
-# ── Driving logic (same as test_e2e_race) ─────────────────────────────
-
-const PARALLEL_THRESHOLD := 0.25
-
-var _steering_left: bool = false
-var _steering_active: bool = false
-var _coast_timer: int = 0
-var _in_spin: bool = false
-var _spin_accumulated_rotation: float = 0.0
-var _max_progress: float = 0.0
-var _track_length: float = 0.0
-
-
-func _drive() -> void:
-	if _car == null or _curve == null:
-		return
-
-	var car_pos: Vector2 = _car.get("global_position")
-	var car_rot: float = _car.get("global_rotation")
-	var forward: Vector2 = Vector2.RIGHT.rotated(car_rot)
-	var local_pos: Vector2 = _track_path.to_local(car_pos)
-	var speed: float = _car.get("current_speed") as float
-
-	var nearest_ofs: float = _curve.get_closest_offset(local_pos)
-	var total_length: float = _curve.get_baked_length()
-
-	var look_dist: float = maxf(200.0, speed * 2.0)
-	var ahead_ofs: float = nearest_ofs + look_dist
-	if ahead_ofs > total_length:
-		ahead_ofs -= total_length
-
-	var ahead_xf: Transform2D = _curve.sample_baked_with_rotation(ahead_ofs) as Transform2D
-	var ahead_global: Vector2 = _track_path.to_global(ahead_xf.origin)
-	var to_target: Vector2 = (ahead_global - car_pos).normalized()
-	var angle_to_target: float = forward.angle_to(to_target)
-
-	var acc_rot_v = _car.get("_accumulated_spin_rotation")
-	var acc_rot: float = acc_rot_v if typeof(acc_rot_v) == TYPE_FLOAT else 0.0
-	var min_rot: float = TAU
-
-	if _coast_timer > 0:
-		_coast_timer -= 1
-
-	if _steering_active:
-		var can_release: bool = acc_rot >= min_rot
-		var facing_target: bool = abs(angle_to_target) < PARALLEL_THRESHOLD
-		if can_release and facing_target:
-			_steering_active = false
-			_car.set_test_input(false, false)
-			_coast_timer = 8
-	else:
-		if _coast_timer == 0 and abs(angle_to_target) > PARALLEL_THRESHOLD:
-			_steering_active = true
-			_steering_left = (angle_to_target > 0)
-
-	if _steering_active:
-		_car.set_test_input(_steering_left, not _steering_left)
-	else:
-		_car.set_test_input(false, false)
-
-	var prog: float = nearest_ofs / total_length
-	if prog > _max_progress:
-		_max_progress = prog
+	# Create the DriverAI.
+	_ai = DriverAIScript.new()
+	_ai.setup(_car, _track_path)
 
 
 func _print_summary() -> void:

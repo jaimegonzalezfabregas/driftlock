@@ -167,9 +167,9 @@ func _check_results() -> void:
 	var entries := 0
 	var exits := 0
 	for sc in _state_changes:
-		if sc.state == 1:
+		if sc.state == 1:  # ACCELERATE
 			entries += 1
-		elif sc.state == 0:
+		elif sc.state == 2:  # SPINNING
 			exits += 1
 	_assert(entries >= 1, "At least 1 SPIN entry recorded")
 	_assert(exits >= 1, "At least 1 ACCELERATE (spin exit) recorded")
@@ -203,7 +203,7 @@ func _log_car_state() -> void:
 	var state = _car.get("car_state")
 	if typeof(pos) != TYPE_VECTOR2 or typeof(speed) != TYPE_FLOAT:
 		return
-	var sl := "ACCEL" if typeof(state) == TYPE_INT and state == 0 else "SPIN"
+	var sl := "ACCEL" if typeof(state) == TYPE_INT and state == 1 else "STOP" if typeof(state) == TYPE_INT and state == 0 else "SPIN"
 	_log("  t=%2ds  pos=(%5.0f,%5.0f)  speed=%5.0f  state=%s" % [_frames / 60, pos.x, pos.y, speed, sl])
 
 

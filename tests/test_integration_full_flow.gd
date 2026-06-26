@@ -212,7 +212,7 @@ func _check_nodes() -> void:
 		_assert(typeof(speed) == TYPE_FLOAT and speed == 0.0,
 			"Car initial speed = %.1f px/s  (0 during countdown, start_race after)" % speed)
 
-		_assert(typeof(state) == TYPE_INT and state == 0,
+		_assert(typeof(state) == TYPE_INT and state == 1,
 			"Car initial state = %d  (0 = ACCELERATE)" % state)
 
 		_assert(typeof(locked) == TYPE_BOOL and locked == true,
@@ -336,7 +336,6 @@ func _configure_params() -> void:
 	var p := gs.get("physics_params") as Resource
 	if p == null:
 		return
-	p.set("min_accelerate_time", 0.0)  # no minimum time for tests
 	p.set("wall_bounce", true)
 	p.set("wall_bounce_restitution", 0.4)
 
@@ -354,7 +353,7 @@ func _log_car_state() -> void:
 	if is_instance_valid(_goal):
 		goal_dist = "%.0f" % pos.distance_to(_goal.global_position)
 
-	var state_label := "ACCEL" if typeof(state) == TYPE_INT and state == 0 else "SPIN"
+	var state_label := "ACCEL" if typeof(state) == TYPE_INT and state == 1 else ("STOP" if typeof(state) == TYPE_INT and state == 0 else "SPIN")
 	var vel = _car.get("velocity")
 	var rot = _car.get("global_rotation")
 	var fwd_speed_str := "?"
@@ -425,7 +424,7 @@ func _print_summary() -> void:
 	if _state_changes.size() > 0:
 		_log("State changes: %d" % _state_changes.size())
 		for sc in _state_changes:
-			var sl := "ACCEL" if sc.state == 0 else "SPIN"
+			var sl := "ACCEL" if sc.state == 1 else ("STOP" if sc.state == 0 else "SPIN")
 			_log("  frame %d -> %s" % [sc.frame, sl])
 	else:
 		_log("State changes: 0")

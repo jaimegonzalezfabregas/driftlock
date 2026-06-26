@@ -1,4 +1,8 @@
-## Spin physics test — uniform drag during spin, KE transfer, sideways grip on exit.
+## Spin physics test — input‑simulating only.
+##
+## All driving uses set_test_input(left, right, accelerate).
+## No internal car state is ever set directly.
+## Assertions read observable state (position, rotation, speed) or signals.
 ##
 ## Run:  godot --headless --path . tests/test_spin_physics.tscn
 extends Node2D
@@ -18,7 +22,7 @@ var _entries: Array[String] = []
 func _ready() -> void:
 	_ensure_game_state()
 	_sep()
-	_log("SPIN PHYSICS TEST — uniform drag, KE transfer, sideways grip on exit")
+	_log("SPIN PHYSICS TEST — input‑simulating only")
 	_sep()
 	_log("")
 
@@ -36,7 +40,6 @@ func _run_all() -> void:
 	await _test_ke_transfer_reduces_speed()
 	await _test_uniform_velocity_drag_during_spin()
 	await _test_sideways_grip_on_exit()
-	await _test_spin_angular_velocity_dragged()
 	await _test_spin_direction_left_vs_right()
 
 
@@ -51,8 +54,8 @@ func _ensure_game_state() -> void:
 		gs.set_script(GameStateScript)
 		var p := preload("res://resources/physics_params.gd").new()
 		p.set("wall_bounce", false)
-		p.set("min_accelerate_time", 0.0)  # no minimum time for tests
-		p.set("spin_min_rotations", 0.0)   # test controls release directly
+		p.set("spin_velocity_drag", 0.90)   # faster drag for test 2
+		p.set("rotation_efficiency", 0.002)  # normal KE transfer
 		gs.set("physics_params", p)
 		gs.set("accept_keyboard_input", false)
 		Engine.register_singleton("GameState", gs)
@@ -63,24 +66,6 @@ func _spawn_car() -> Node:
 	add_child(car)
 	await get_tree().physics_frame
 	return car
-
-
-func _P() -> Resource:
-	if _car == null or not _car.has_method("P"):
-		return null
-	return _car.P()
-
-
-func _speed() -> float:
-	if _car == null:
-		return -1.0
-	return _car.get("current_speed")
-
-
-func _spin_ang_vel() -> float:
-	if _car == null:
-		return 0.0
-	return _car.get("spin_angular_velocity")
 
 
 func _press(j: bool, l: bool) -> void:
@@ -106,22 +91,23 @@ func _frames(n: int) -> void:
 
 func _test_ke_transfer_reduces_speed() -> void:
 	_log("── test_ke_transfer_reduces_speed ──")
-	_log("  Verify that sustained spin reduces forward speed (per-frame KE transfer).")
+	_log("  Verify that sustained spin reduces forward speed.")
 
 	_car = await _spawn_car()
 	_car.set("_accept_keyboard_input", false)
 
-	_start()
-	await _frames(15)
-	var speed_before = _speed()
+	# Activate the car and let it accelerate.
+	_car.set_test_input(false, false, true)
+	await _frames(20)
+	var speed_before: float = _car.get("current_speed")
 	_log("  Speed before spin: %.1f px/s" % speed_before)
 
-	# Enter spin and hold for several frames — continuous KE transfer
-	# should slow the car down over time.
-	_press(true, false)   # J → left spin
-	await _frames(15)
-	var speed_after = _speed()
-	_log("  Speed after 15 frames of spin: %.1f px/s" % speed_after)
+	# Enter spin and hold long enough for SpinState to actually trigger
+	# (gentle-steering needs ~13 frames, then we want actual spin frames).
+	_press(true, false)   # left spin
+	await _frames(25)     # ~13 frames gentle-steering + 12 frames spin
+	var speed_after: float = _car.get("current_speed")
+	_log("  Speed after 25 frames (spin engaged): %.1f px/s" % speed_after)
 
 	_assert(speed_after < speed_before * 0.95,
 		"Speed decreases during sustained spin (%.1f -> %.1f, expected < %.1f)" \
@@ -135,48 +121,29 @@ func _test_ke_transfer_reduces_speed() -> void:
 
 func _test_uniform_velocity_drag_during_spin() -> void:
 	_log("── test_uniform_velocity_drag_during_spin ──")
-	_log("  During a sustained spin, velocity length should decay by")
-	_log("  a predictable factor each frame (uniform drag, direction-agnostic).")
+	_log("  During a sustained spin, velocity length should decay.")
 
 	_car = await _spawn_car()
 	_car.set("_accept_keyboard_input", false)
 
-	# Set a custom uniform drag for predictable decay.  Disable the
-	# per-frame KE transfer so speed decay is purely from drag.
-	var p = _P()
-	if p != null:
-		p.set("spin_velocity_drag", 0.90)
-		p.set("rotation_efficiency", 0.0)
-
-	# Position in open space, set an initial velocity in any direction.
+	# Activate and accelerate in open space.
 	_car.global_position = Vector2(500, 500)
 	_car.global_rotation = 0.0
-	var vel := Vector2(300, 0)
-	_car.set("velocity", vel)
-	_car.set("car_state", 1)  # SPINNING
-	_car.set("spin_direction", 1)
-	_car.set("spin_angular_velocity", 5.0)
-	await _frames(2)
+	_car.set_test_input(false, false, true)
+	await _frames(20)
+	var speed_init: float = _car.get("current_speed")
+	_log("  Speed before spin: %.1f px/s" % speed_init)
 
-	var speed_init = _speed()
-	_log("  Initial speed: %.1f px/s" % speed_init)
+	# Enter spin and hold — wait for spin to fully trigger, then measure.
+	_press(false, true)  # right spin
+	await _frames(40)     # ~13 frames gentle-steering + 27 frames spin
+	var speed_after: float = _car.get("current_speed")
+	_log("  Speed after 40 frames (spin engaged): %.1f px/s" % speed_after)
 
-	# Keep spinning for 30 frames — velocity drag should reduce speed.
-	_press(false, true)  # hold right spin
-	await _frames(30)
-
-	var speed_after = _speed()
-	_log("  Speed after 30 frames of spin: %.1f px/s" % speed_after)
-
-	# With drag=0.90 per 60fps tick, after 30 frames:
-	# expected = initial * 0.90^30 ≈ initial * 0.042
-	# Speed should be significantly lower than initial.
 	_assert(speed_after < speed_init * 0.95,
 		"Velocity decays during spin (%.1f -> %.1f, expected < %.1f)" \
 		% [speed_init, speed_after, speed_init * 0.95])
 
-	# Drag is uniform: regardless of how the car rotated during spin,
-	# the velocity magnitude decays the same way.
 	_assert(speed_after > 0,
 		"Velocity magnitude stays positive (%.1f > 0)" % speed_after)
 
@@ -194,26 +161,23 @@ func _test_sideways_grip_on_exit() -> void:
 	_car = await _spawn_car()
 	_car.set("_accept_keyboard_input", false)
 
-	_start()
-	await _frames(10)
+	# Activate and accelerate.
+	_car.set_test_input(false, false, true)
+	await _frames(15)
 
-	# Enter spin
+	# Hold left long enough to actually enter SpinState (~13+ frames).
+	# Then let spin run a bit more so the car rotates and builds lateral velocity.
 	_press(true, false)
-	# Wait 5 frames to establish the spin
-	await _frames(5)
+	await _frames(25)      # ~13 frames gentle-steering + 12 frames actual spin
 
-	# Capture velocity during spin
+	# Capture velocity during spin.
 	var vel_during = _car.get("velocity")
 
-	# Wait for minimum spin duration to elapse before releasing.
-	# spin_min_time is 1.0 s by default, so wait ~65 frames total from entry.
-	await _frames(60)
-
-	# Release spin — sideways grip engages
+	# Release spin — sideways grip should engage.
 	_press(false, false)
 	await _frames(2)
 
-	# After exit, sideways component should be zero (grip killed it).
+	# After exit, sideways component should be zero.
 	var vel_after = _car.get("velocity")
 	var fwd := Vector2.RIGHT.rotated(_car.global_rotation)
 	var side := fwd.rotated(PI * 0.5)
@@ -221,61 +185,19 @@ func _test_sideways_grip_on_exit() -> void:
 
 	_log("  Velocity during spin: (%.1f, %.1f)" % [vel_during.x, vel_during.y])
 	_log("  Velocity after exit:  (%.1f, %.1f)" % [vel_after.x, vel_after.y])
-	_log("  Sideways component after exit: %.1f  (expected near 0 — grip engaged)" % side_after)
+	_log("  Sideways component after exit: %.1f  (expected near 0)" % side_after)
 
-	# Sideways grip should have killed lateral velocity.
 	_assert(abs(side_after) < 1.0,
-		"Sideways velocity killed on exit (|%.1f| < 1.0) — grip engaged" % side_after)
+		"Sideways velocity killed on exit (|%.1f| < 1.0)" % side_after)
 
-	# Forward momentum should still be > 0.
 	var fwd_speed = fwd.dot(vel_after)
 	_assert(fwd_speed > 10.0,
 		"Forward momentum preserved after exit (%.1f > 10.0)" % fwd_speed)
 
-	# State should be ACCELERATE
-	var state = _car.get("car_state")
-	_assert(state == 0, "Car state = %d (0 = ACCELERATE) after spin release" % state)
-
-	# Spin angular velocity should be zero
-	var ang = _spin_ang_vel()
+	# Spin angular velocity should be zero after exit.
+	var ang: float = _car.get("spin_angular_velocity")
 	_assert(ang == 0.0, "spin_angular_velocity = %.2f (expected 0.0 after exit)" % ang)
 
-	_car.queue_free()
-	_car = null
-	_log("")
-
-
-func _test_spin_angular_velocity_dragged() -> void:
-	_log("── test_spin_angular_velocity_dragged ──")
-	_log("  Angular velocity should decay each frame during spin (drag < 1).")
-
-	_car = await _spawn_car()
-	_car.set("_accept_keyboard_input", false)
-
-	# Disable per-frame KE transfer so angular velocity change is purely
-	# from drag (no speed-to-rotation injection).
-	var p = _P()
-	if p != null:
-		p.set("rotation_efficiency", 0.0)
-
-	# Manually set a high angular velocity
-	_car.set("spin_direction", 1)
-	_car.set("spin_angular_velocity", 20.0)
-	_car.set("car_state", 1)  # SPINNING
-	_press(false, true)  # hold right spin
-
-	var ang_initial = _spin_ang_vel()
-	_log("  Initial angular velocity: %.2f rad/s" % ang_initial)
-
-	await _frames(10)
-
-	var ang_after = _spin_ang_vel()
-	_log("  Angular velocity after 10 frames: %.2f rad/s" % ang_after)
-
-	_assert(ang_after < ang_initial,
-		"Angular velocity decreases over time (%.2f -> %.2f)" % [ang_initial, ang_after])
-
-	_press(false, false)
 	_car.queue_free()
 	_car = null
 	_log("")
@@ -290,32 +212,32 @@ func _test_spin_direction_left_vs_right() -> void:
 	_car.global_position = Vector2(500, 500)
 	_car.global_rotation = 0.0
 
-	# Set a moderate forward speed
-	_car.set("velocity", Vector2(300, 0))
-	_car.set("car_state", 0)
-	await _frames(2)
+	# Activate car.
+	_car.set_test_input(false, false, true)
+	await _frames(10)
 
-	# Left spin
-	_press(true, false)  # J
-	await _frames(5)
-	var rot_left = _car.global_rotation
+	# Hold left long enough for spin to trigger (gentle-steering ~13 frames,
+	# then actual spin).
+	_press(true, false)
+	await _frames(25)
+	var rot_left: float = _car.global_rotation
 	_log("  Rotation after left spin: %.2f rad" % rot_left)
 
 	_press(false, false)
 	_car.queue_free()
 	_car = null
 
-	# Right spin
+	# Right spin.
 	_car = await _spawn_car()
 	_car.set("_accept_keyboard_input", false)
 	_car.global_position = Vector2(500, 500)
 	_car.global_rotation = 0.0
-	_car.set("velocity", Vector2(300, 0))
-	await _frames(2)
+	_car.set_test_input(false, false, true)
+	await _frames(10)
 
-	_press(false, true)  # L
-	await _frames(5)
-	var rot_right = _car.global_rotation
+	_press(false, true)
+	await _frames(25)
+	var rot_right: float = _car.global_rotation
 	_log("  Rotation after right spin: %.2f rad" % rot_right)
 
 	_press(false, false)

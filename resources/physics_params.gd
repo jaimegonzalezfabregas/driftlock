@@ -28,16 +28,6 @@ extends Resource
 ## 0.93: moderate decay that limits peak angular velocity.
 @export var spin_drag: float = 0.93
 
-## Minimum accumulated rotation (radians) before the spin can be released.
-## The car must rotate at least this much after entering a spin, even if
-## the turn key is released early.  ~1 full rotation ≈ 6.28 rad.
-@export var spin_min_rotations: float = TAU
-
-## Minimum accelerate duration (seconds).  After exiting a spin the car
-## must accelerate for at least this long before it can spin again.
-## Prevents rapid spin↔accelerate flickering.
-@export var min_accelerate_time: float = 0.5
-
 ## Uniform velocity multiplier per 60‑FPS physics tick during spin
 ## (0.0 – 1.0).  Drag is equal in all directions so the car slides
 ## in a straight line while spinning.  Sideways grip only engages
