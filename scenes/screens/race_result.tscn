@@ -30,44 +30,6 @@ theme_override_font_sizes/font_size = 48
 theme_override_colors/font_color = Color(1, 0.9, 0.2, 1)
 text = "RACE COMPLETE!"
 
-[node name="TimeLabel" type="Label" parent="Center/VBox"]
-unique_name_in_owner = true
-horizontal_alignment = 1
-theme_override_font_sizes/font_size = 28
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-text = ""
-
-[node name="MedalLabel" type="Label" parent="Center/VBox"]
-unique_name_in_owner = true
-horizontal_alignment = 1
-theme_override_font_sizes/font_size = 36
-text = ""
-
-[node name="Thresholds" type="HBoxContainer" parent="Center/VBox"]
-alignment = 1
-theme_override_constants/separation = 24
-
-[node name="BronzeLabel" type="Label" parent="Center/VBox/Thresholds"]
-unique_name_in_owner = true
-horizontal_alignment = 1
-theme_override_font_sizes/font_size = 16
-theme_override_colors/font_color = Color(0.8, 0.5, 0.2, 1)
-text = ""
-
-[node name="SilverLabel" type="Label" parent="Center/VBox/Thresholds"]
-unique_name_in_owner = true
-horizontal_alignment = 1
-theme_override_font_sizes/font_size = 16
-theme_override_colors/font_color = Color(0.75, 0.75, 0.8, 1)
-text = ""
-
-[node name="GoldLabel" type="Label" parent="Center/VBox/Thresholds"]
-unique_name_in_owner = true
-horizontal_alignment = 1
-theme_override_font_sizes/font_size = 16
-theme_override_colors/font_color = Color(1, 0.8, 0.1, 1)
-text = ""
-
 [node name="Spacer" type="Control" parent="Center/VBox"]
 custom_minimum_size = Vector2(0, 20)
 
@@ -79,7 +41,7 @@ theme_override_constants/separation = 16
 unique_name_in_owner = true
 custom_minimum_size = Vector2(160, 44)
 theme_override_font_sizes/font_size = 18
-text = "Improve Time"
+text = "Play Again"
 
 [node name="NextBtn" type="Button" parent="Center/VBox/Buttons"]
 unique_name_in_owner = true

@@ -1,0 +1,49 @@
+[gd_scene load_steps=2 format=3 uid="uid://pause_overlay_01"]
+
+[ext_resource type="Script" path="res://scenes/ui/pause_overlay.gd" id="1"]
+
+[node name="PauseOverlay" type="CanvasLayer"]
+layer = 20
+script = ExtResource("1")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 1
+grow_vertical = 1
+color = Color(0, 0, 0, 0.6)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 1
+grow_vertical = 1
+
+[node name="VBox" type="VBoxContainer" parent="Center"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="PausedLabel" type="Label" parent="Center/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 48
+horizontal_alignment = 1
+text = "PAUSED"
+
+[node name="ResumeBtn" type="Button" parent="Center/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(160, 44)
+theme_override_font_sizes/font_size = 24
+text = "Resume"
+
+[node name="QuitBtn" type="Button" parent="Center/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(160, 44)
+theme_override_font_sizes/font_size = 20
+text = "Quit to Level Select"

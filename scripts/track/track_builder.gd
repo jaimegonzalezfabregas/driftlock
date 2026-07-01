@@ -12,10 +12,6 @@
 extends Path2D
 class_name TrackBuilder
 
-# Shared shape source — the grid slot derives its outline from the
-# same physics_params resource that car.gd reads for drawing.
-const _PP := preload("res://resources/physics_params.gd")
-
 # =====================================================================
 # Export
 # =====================================================================
@@ -271,9 +267,8 @@ func _draw_grid_slot(half: float) -> void:
 	var c := xf.origin
 
 	# Car visual dimensions (match car.gd _draw()).
-	var p := _PP.new()
-	var car_len := p.car_draw_width    # along forward direction (px)
-	var car_wid := p.car_draw_height   # perpendicular (px)
+	var car_len := 50
+	var car_wid := 25
 	var nose_ofs := 2.0                # nose tip extends beyond body rect
 
 	# Front of the slot = at the car's nose tip.
