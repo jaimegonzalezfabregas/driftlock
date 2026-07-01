@@ -1,19 +1,16 @@
 ## GameState — global singleton
 ##
 ## Holds the shared PhysicsParams instance, a keyboard-accept flag,
-## and level progression state (20 levels, 4x5 grid with boss levels).
+## and level progression state (8 levels, 4-column grid with boss levels).
 ## Autoloaded in project settings.
 extends Node
 
 ## The single source of truth for all physics tuning knobs.
 var physics_params: Resource = null  # Actually PhysicsParams
 
-## Whether the car should respond to real keyboard input.
-## (False during automated tests so test-input doesn't fight keyboard.)
-var accept_keyboard_input: bool = true
 
 ## Number of levels in the game.
-const LEVEL_COUNT: int = 20
+const LEVEL_COUNT: int = 8
 
 ## Each level's metadata.
 const LEVEL_DATA: Array[Dictionary] = [
@@ -75,93 +72,6 @@ const LEVEL_DATA: Array[Dictionary] = [
 		"is_boss": true,
 		"bronze": 75.0, "silver": 62.0, "gold": 52.0,
 	},
-	# Row 3 — Advanced (levels 9-12)
-	{
-		"scene": "res://scenes/levels/level_09.tscn",
-		"label": "Tight Squeeze",
-		"description": "Sharp chicanes",
-		"is_boss": false,
-		"bronze": 50.0, "silver": 40.0, "gold": 33.0,
-	},
-	{
-		"scene": "res://scenes/levels/level_10.tscn",
-		"label": "The Snake",
-		"description": "A winding serpentine layout",
-		"is_boss": false,
-		"bronze": 55.0, "silver": 44.0, "gold": 36.0,
-	},
-	{
-		"scene": "res://scenes/levels/level_11.tscn",
-		"label": "Double Loop",
-		"description": "Two crossing loops",
-		"is_boss": false,
-		"bronze": 52.0, "silver": 42.0, "gold": 35.0,
-	},
-	{
-		"scene": "res://scenes/levels/level_12.tscn",
-		"label": "Boss: Endurance Hairpin",
-		"description": "3 laps of hairpins — no room for error",
-		"is_boss": true,
-		"bronze": 85.0, "silver": 70.0, "gold": 58.0,
-	},
-	# Row 4 — Expert (levels 13-16)
-	{
-		"scene": "res://scenes/levels/level_13.tscn",
-		"label": "Spiral",
-		"description": "A tightening spiral track",
-		"is_boss": false,
-		"bronze": 58.0, "silver": 46.0, "gold": 38.0,
-	},
-	{
-		"scene": "res://scenes/levels/level_14.tscn",
-		"label": "Zigzag",
-		"description": "Rapid alternating turns",
-		"is_boss": false,
-		"bronze": 55.0, "silver": 44.0, "gold": 36.0,
-	},
-	{
-		"scene": "res://scenes/levels/level_15.tscn",
-		"label": "The Bowl",
-		"description": "Banked curves and tight apexes",
-		"is_boss": false,
-		"bronze": 60.0, "silver": 48.0, "gold": 40.0,
-	},
-	{
-		"scene": "res://scenes/levels/level_16.tscn",
-		"label": "Boss: Endurance Figure 8",
-		"description": "3 laps of figure-8 — precision required",
-		"is_boss": true,
-		"bronze": 95.0, "silver": 78.0, "gold": 65.0,
-	},
-	# Row 5 — Master (levels 17-20)
-	{
-		"scene": "res://scenes/levels/level_17.tscn",
-		"label": "Maze",
-		"description": "Complex intersecting paths",
-		"is_boss": false,
-		"bronze": 62.0, "silver": 50.0, "gold": 42.0,
-	},
-	{
-		"scene": "res://scenes/levels/level_18.tscn",
-		"label": "Gauntlet",
-		"description": "Long and punishing circuit",
-		"is_boss": false,
-		"bronze": 68.0, "silver": 55.0, "gold": 46.0,
-	},
-	{
-		"scene": "res://scenes/levels/level_19.tscn",
-		"label": "The Knot",
-		"description": "A tangled mess of curves",
-		"is_boss": false,
-		"bronze": 65.0, "silver": 52.0, "gold": 44.0,
-	},
-	{
-		"scene": "res://scenes/levels/level_20.tscn",
-		"label": "Boss: The Gauntlet Endurance",
-		"description": "3 laps of the ultimate track",
-		"is_boss": true,
-		"bronze": 110.0, "silver": 90.0, "gold": 75.0,
-	},
 ]
 
 ## Which levels are unlocked (index 0 = Level 1).
@@ -217,7 +127,7 @@ func complete_level(level_index: int, race_time: float) -> bool:
 		level_times[level_index] = race_time
 		level_tiers[level_index] = _compute_tier(level_index, race_time)
 
-	# Boss levels (indices 3, 7, 11, 15, 19) unlock the next group of 4.
+	# Boss levels (indices 3, 7) unlock the next group of 4.
 	if LEVEL_DATA[level_index].get("is_boss", false):
 		var next_group_start := level_index + 1
 		var next_group_end := mini(next_group_start + 4, LEVEL_COUNT)
@@ -267,7 +177,7 @@ func get_bronze_time(idx: int) -> float:
 	return LEVEL_DATA[idx].get("bronze", INF)
 
 
-## —── Save / Load ─────────────────────────────────────────────────────────
+## —-- Save / Load ---------------------------------------------------------
 const SAVE_PATH: String = "user://driftlock_records.cfg"
 
 

@@ -12,7 +12,7 @@ enum ImageFlipMode {
 }
 
 
-static var _spinner: AnimatedTexture
+static var _spinner: Texture2D
 static var icon_cache: Dictionary[STATE, Texture2D]
 
 
@@ -73,30 +73,20 @@ static func get_flipped_icon(icon_name: String, mode: = ImageFlipMode.HORIZONTAl
 	return ImageTexture.create_from_image(_flip_image(icon, mode))
 
 
-static func get_spinner() -> AnimatedTexture:
+# AnimatedTexture was removed in Godot 4.4+; replaced with static first-frame fallback.
+static func get_spinner() -> Texture2D:
 	if _spinner != null:
 		return _spinner
-	_spinner = AnimatedTexture.new()
-	_spinner.frames = 8
-	_spinner.speed_scale = 2.5
-	for frame in _spinner.frames:
-		_spinner.set_frame_texture(frame, get_icon("Progress%d" % (frame+1)))
-		_spinner.set_frame_duration(frame, 0.2)
+	# Use the first progress frame as a static spinner texture
+	_spinner = get_icon("Progress1")
 	return _spinner
 
 
-static func get_color_animated_icon(icon_name: String, from: Color, to: Color) -> AnimatedTexture:
+# AnimatedTexture was removed in Godot 4.4+; replaced with static icon using the 'to' color.
+static func get_color_animated_icon(icon_name: String, from: Color, to: Color) -> Texture2D:
 	if not Engine.is_editor_hint():
 		return null
-	var texture := AnimatedTexture.new()
-	texture.frames = 8
-	texture.speed_scale = 2.5
-	var color := from
-	for frame in texture.frames:
-		color = lerp(color, to, 0.2)
-		texture.set_frame_texture(frame, get_icon(icon_name, color))
-		texture.set_frame_duration(frame, .2)
-	return texture
+	return get_icon(icon_name, to)
 
 
 static func get_run_overall_icon() -> Texture2D:
@@ -132,7 +122,10 @@ static func _merge_images(image1: Image, offset1: Vector2i, image2: Image, offse
 	if image1.get_height() < image2.get_height():
 		image1.resize(image2.get_width(), image2.get_height())
 	# Create a new Image for the merged result
-	var merged_image := Image.create(image1.get_width(), image1.get_height(), false, Image.FORMAT_RGBA8)
+	var merged_image := Image.new()
+	var _data := PackedByteArray()
+	_data.resize(image1.get_width() * image1.get_height() * 4)
+	merged_image.set_data(image1.get_width(), image1.get_height(), false, Image.FORMAT_RGBA8, _data)
 	merged_image.blit_rect(image1, Rect2(Vector2.ZERO, image1.get_size()), offset1)
 	merged_image.blit_rect_mask(image2, image2, Rect2(Vector2.ZERO, image2.get_size()), offset2)
 	return merged_image
@@ -144,7 +137,10 @@ static func _merge_images_scaled(image1: Image, offset1: Vector2i, image2: Image
 	if image1.get_height() < image2.get_height():
 		image1.resize(image2.get_width(), image2.get_height())
 	# Create a new Image for the merged result
-	var merged_image := Image.create(image1.get_width(), image1.get_height(), false, image1.get_format())
+	var merged_image := Image.new()
+	var _data := PackedByteArray()
+	_data.resize(image1.get_width() * image1.get_height() * 4)
+	merged_image.set_data(image1.get_width(), image1.get_height(), false, image1.get_format(), _data)
 	merged_image.blend_rect(image1, Rect2(Vector2.ZERO, image1.get_size()), offset1)
 	@warning_ignore("narrowing_conversion")
 	#image2.resize(image2.get_width()/1.3, image2.get_height()/1.3)

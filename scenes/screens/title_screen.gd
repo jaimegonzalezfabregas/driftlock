@@ -5,6 +5,7 @@ extends Control
 
 
 func _ready() -> void:
+	RenderingServer.set_default_clear_color(Color(0.3, 0.3, 0.3))
 	var start_btn: Button = $CenterContainer/VBoxContainer/StartGameButton
 	start_btn.pressed.connect(_on_start_game)
 	var level_btn: Button = $CenterContainer/VBoxContainer/LevelSelectButton

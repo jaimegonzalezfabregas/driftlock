@@ -1,0 +1,94 @@
+[gd_scene format=3 uid="uid://race_result_auto"]
+
+[ext_resource type="Script" path="res://scenes/screens/race_result.gd" id="1"]
+
+[node name="RaceResult" type="CanvasLayer"]
+layer = 30
+script = ExtResource("1")
+
+[node name="Background" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 1
+grow_vertical = 1
+color = Color(0, 0, 0, 0.75)
+
+[node name="Center" type="CenterContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 1
+grow_vertical = 1
+
+[node name="VBox" type="VBoxContainer" parent="Center"]
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Center/VBox"]
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 48
+theme_override_colors/font_color = Color(1, 0.9, 0.2, 1)
+text = "RACE COMPLETE!"
+
+[node name="TimeLabel" type="Label" parent="Center/VBox"]
+unique_name_in_owner = true
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 28
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+text = ""
+
+[node name="MedalLabel" type="Label" parent="Center/VBox"]
+unique_name_in_owner = true
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 36
+text = ""
+
+[node name="Thresholds" type="HBoxContainer" parent="Center/VBox"]
+alignment = 1
+theme_override_constants/separation = 24
+
+[node name="BronzeLabel" type="Label" parent="Center/VBox/Thresholds"]
+unique_name_in_owner = true
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.8, 0.5, 0.2, 1)
+text = ""
+
+[node name="SilverLabel" type="Label" parent="Center/VBox/Thresholds"]
+unique_name_in_owner = true
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.75, 0.75, 0.8, 1)
+text = ""
+
+[node name="GoldLabel" type="Label" parent="Center/VBox/Thresholds"]
+unique_name_in_owner = true
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(1, 0.8, 0.1, 1)
+text = ""
+
+[node name="Spacer" type="Control" parent="Center/VBox"]
+custom_minimum_size = Vector2(0, 20)
+
+[node name="Buttons" type="HBoxContainer" parent="Center/VBox"]
+alignment = 1
+theme_override_constants/separation = 16
+
+[node name="ImproveBtn" type="Button" parent="Center/VBox/Buttons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 44)
+theme_override_font_sizes/font_size = 18
+text = "Improve Time"
+
+[node name="NextBtn" type="Button" parent="Center/VBox/Buttons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 44)
+theme_override_font_sizes/font_size = 18
+text = "Next Level"
+
+[node name="SelectBtn" type="Button" parent="Center/VBox/Buttons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 44)
+theme_override_font_sizes/font_size = 18
+text = "Level Select"

@@ -10,15 +10,15 @@ func _init(obj: Object = null) -> void:
 		if obj.has_method("serialize"):
 			_data = obj.call("serialize")
 		else:
-			_data = inst_to_dict(obj)
+			_data = GdObjects.inst_to_dict(obj)
 
 
 func get_data() -> Object:
-	return dict_to_inst(_data)
+	return GdObjects.dict_to_inst(_data)
 
 
 func serialize() -> String:
-	return JSON.stringify(inst_to_dict(self))
+	return JSON.stringify(GdObjects.inst_to_dict(self))
 
 
 # using untyped version see comments below
@@ -34,4 +34,4 @@ static func deserialize(json_value: String) -> Object:
 		push_error("Can't deserialize JSON. Expecting dictionary, error at line %d:\n	error: %s \n	json: '%s'"
 			% [result.error_line, result.error_string, json_value])
 		return null
-	return dict_to_inst(result)
+	return GdObjects.dict_to_inst(result)

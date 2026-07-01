@@ -18,6 +18,47 @@ const TYPE_CANVAS	= 2003
 const TYPE_ENUM		= 2004
 
 
+# Compatibility shim for inst_to_dict which was removed in Godot 4.3+.
+# Serializes an Object instance to a Dictionary including its script @path and @subpath.
+static func inst_to_dict(obj: Object) -> Dictionary:
+	var dict := Dictionary()
+	var script := obj.get_script()
+	if script:
+		dict["@path"] = script.resource_path
+		dict["@subpath"] = ""
+	else:
+		dict["@path"] = ""
+		dict["@subpath"] = ""
+	for prop in obj.get_property_list():
+		var usage := prop["usage"] as int
+		if usage & PROPERTY_USAGE_STORAGE:
+			var prop_name: String = prop["name"]
+			if prop_name in dict:
+				continue
+			dict[prop_name] = obj.get(prop_name)
+	return dict
+
+
+# Compatibility shim for dict_to_inst which was removed in Godot 4.3+.
+# Deserializes a Dictionary back to an Object instance.
+static func dict_to_inst(dict: Dictionary) -> Object:
+	var script_path := dict.get("@path", "") as String
+	if script_path.is_empty():
+		return null
+	var script := load(script_path) as GDScript
+	if script == null:
+		return null
+	var arg_list := build_function_default_arguments(script, "_init")
+	var instance: Object = script.callv("new", arg_list)
+	if instance == null:
+		return null
+	for key: String in dict:
+		if key.begins_with("@"):
+			continue
+		instance.set(key, dict[key])
+	return instance
+
+
 const TYPE_AS_STRING_MAPPINGS := {
 	TYPE_NIL: "null",
 	TYPE_BOOL: "bool",
@@ -163,7 +204,7 @@ static func obj2dict(obj: Object, hashed_objects := Dictionary()) -> Dictionary:
 		else:
 			var d := inst_to_dict(obj)
 			clazz_path = d["@path"]
-			if d["@subpath"] != NodePath(""):
+			if not d["@subpath"].is_empty():
 				clazz_name = d["@subpath"]
 				dict["@inner_class"] = true
 			else:

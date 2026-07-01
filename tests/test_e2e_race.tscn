@@ -1,6 +1,0 @@
-[gd_scene format=3 uid="uid://e2e_race_test_scene"]
-
-[ext_resource type="Script" path="res://tests/test_e2e_race.gd" id="1"]
-
-[node name="TestE2ERace" type="Node2D"]
-script = ExtResource("1")

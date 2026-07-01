@@ -1,13 +1,20 @@
-[gd_scene format=3]
+[gd_scene load_steps=4 format=3 uid="uid://srkxpv8137ls"]
 
-[ext_resource type="Script" path="res://scenes/levels/level_instance.gd" id="1"]
+[ext_resource type="Script" uid="uid://c00c1q7owf8n3" path="res://scenes/levels/level_instance.gd" id="1"]
 [ext_resource type="Script" uid="uid://bpthnnhd5py3j" path="res://scripts/track_builder.gd" id="2"]
+
+[sub_resource type="Curve2D" id="Curve2D_arxfv"]
+_data = {
+"points": PackedVector2Array(-140, -37.268, 140, 37.268, 441, 456, -40.35099, 102.67401, 40.35099, -102.67401, 700, 350, 68.876015, 47.547005, -68.876015, -47.547005, 616, 133, 94.50101, -45.17701, -94.50101, 45.17701, 370, 137, 28.168, -126.065, -28.168, 126.065, 198, 370, -149.51302, -55.198006, 149.51302, 55.198006, 386, 712, -134.47302, 144.98102, 134.47302, -144.98102, 830, 617, 43.923004, 177.02301, -43.923004, -177.02301, 943, 156, 132.86708, 44.28903, -132.86708, -44.28903, 656, -130, 223.50531, 3.5406914, -223.50531, -3.5406914, 239, -166)
+}
+point_count = 10
 
 [node name="Level08" type="Node2D"]
 script = ExtResource("1")
+level_index = 7
 
 [node name="TrackPath" type="Path2D" parent="."]
+position = Vector2(27, 14)
+curve = SubResource("Curve2D_arxfv")
 script = ExtResource("2")
 track_width = 200.0
-segment_distance = 30.0
-

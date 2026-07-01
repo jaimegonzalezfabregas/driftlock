@@ -1,6 +1,0 @@
-[gd_scene format=3 uid="uid://test_lose_restart_win"]
-
-[ext_resource type="Script" path="res://tests/test_lose_restart_win.gd" id="1"]
-
-[node name="TestLoseRestartWin" type="Node2D"]
-script = ExtResource("1")

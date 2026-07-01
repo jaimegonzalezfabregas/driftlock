@@ -10,11 +10,11 @@
 ## Autoloaded in project settings.
 extends Node
 
-# ── Configuration ────────────────────────────────────────────────────────
+# -- Configuration --------------------------------------------------------
 const SAMPLE_RATE: float = 22050.0
 const MAX_SFX: int = 8  # max simultaneous SFX players (pooled)
 
-# ── Internal ─────────────────────────────────────────────────────────────
+# -- Internal -------------------------------------------------------------
 var _sfx: Dictionary = {}           # name → AudioStreamWAV
 var _player_pool: Array[AudioStreamPlayer2D] = []
 var _pool_idx: int = 0
@@ -25,9 +25,9 @@ func _ready() -> void:
 	_create_player_pool()
 
 
-# ═════════════════════════════════════════════════════════════════════════
+# =========================================================================
 # Public API
-# ═════════════════════════════════════════════════════════════════════════
+# =========================================================================
 
 ## Play a named sound effect (2D positional at listener).
 func play_sfx(name: String) -> void:
@@ -59,9 +59,9 @@ func get_sfx_stream(name: String) -> AudioStreamWAV:
 	return _sfx.get(name) as AudioStreamWAV
 
 
-# ═════════════════════════════════════════════════════════════════════════
+# =========================================================================
 # Sound generation
-# ═════════════════════════════════════════════════════════════════════════
+# =========================================================================
 
 func _generate_all_sfx() -> void:
 	_sfx["countdown_beep"]  = _gen_tone(440.0, 0.12, 0.03)
@@ -188,9 +188,9 @@ func _gen_engine_hum(duration: float) -> AudioStreamWAV:
 	return _build_wav(data)
 
 
-# ═════════════════════════════════════════════════════════════════════════
+# =========================================================================
 # WAV builder
-# ═════════════════════════════════════════════════════════════════════════
+# =========================================================================
 
 func _build_wav(data: PackedByteArray) -> AudioStreamWAV:
 	var wav := AudioStreamWAV.new()
@@ -202,15 +202,15 @@ func _build_wav(data: PackedByteArray) -> AudioStreamWAV:
 	return wav
 
 
-## Write a 16‑bit signed sample at index `i` (mono) into `data`.
+## Write a 16-bit signed sample at index `i` (mono) into `data`.
 static func _data16(data: PackedByteArray, i: int, val: int) -> void:
 	var idx := i * 2
 	data.encode_s16(idx, val)
 
 
-# ═════════════════════════════════════════════════════════════════════════
+# =========================================================================
 # Player pool (2D positional)
-# ═════════════════════════════════════════════════════════════════════════
+# =========================================================================
 
 func _create_player_pool() -> void:
 	for _i in range(MAX_SFX):

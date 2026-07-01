@@ -76,7 +76,7 @@ func save_config(path: String = CONFIG_FILE) -> GdUnitResult:
 
 	var tests: Array = to_save.get(TESTS)
 	for test in test_cases():
-		tests.append(inst_to_dict(test))
+		tests.append(GdObjects.inst_to_dict(test))
 	file.store_string(JSON.stringify(to_save, "\t"))
 	return GdUnitResult.success(path)
 
@@ -113,7 +113,7 @@ func convert_test_json_to_test_cases(jsons: Array) -> Array[GdUnitTestCase]:
 	if jsons.is_empty():
 		return []
 	var tests := jsons.map(func(d: Dictionary) -> GdUnitTestCase:
-		var test: GdUnitTestCase = dict_to_inst(d)
+		var test: GdUnitTestCase = GdObjects.dict_to_inst(d)
 		# we need o covert manually to the corect type becaus JSON do not handle typed values
 		test.guid = GdUnitGUID.new(str(d["guid"]))
 		test.attribute_index = test.attribute_index as int
